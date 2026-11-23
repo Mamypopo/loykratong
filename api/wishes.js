@@ -86,7 +86,8 @@ function createHandler({ store }) {
       const ip = clientIp(req);
       const client = /^[A-Za-z0-9-]{8,64}$/.test(String(data.client || '')) ? String(data.client) : 'ip-' + ip;
       if (!(await store.allow({ client, ip }))) return send(res, 429, { error: 'too_many' });
-      const id = await store.add({ name, wish, design: look, photo });
+      const kid = look && /^[a-z0-9]{6,24}$/.test(String(data.kid || '')) ? String(data.kid) : null;
+      const id = await store.add({ name, wish, design: look, photo, kid });
       return send(res, 201, { ok: true, id });
     } catch (e) {
       console.error('add failed', e.message);
@@ -101,3 +102,4 @@ module.exports = function (req, res) {
   return defaultHandler(req, res);
 };
 module.exports.createHandler = createHandler;
+module.exports.helpers = { send, sameOrigin, readBody };

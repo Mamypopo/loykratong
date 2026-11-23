@@ -160,6 +160,7 @@
           var body = { name: entry.name, wish: entry.wish, client: clientId() };
           if (entry.design) body.design = entry.design;
           if (entry.photo) body.photo = entry.photo;
+          if (entry.kid) body.kid = entry.kid;
           return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
             .then(function (r) {
               return r.json().catch(function () { return {}; }).then(function (b) {
@@ -294,9 +295,11 @@
     '.lk-egg .lk-btn-float{background:linear-gradient(#fff0a0,#ffc94a 55%,#ff9f2e);color:#4a1f6b;box-shadow:0 4px 0 #b85c10,0 0 18px rgba(255,190,80,.55)}',
     '.lk-egg .lk-btn-enter{background:linear-gradient(#ffffff,#ece4ff);color:#3b1a6e;border-radius:999px;padding:12px 30px;font-size:16px;box-shadow:0 5px 0 #8a6bd1,0 12px 28px rgba(0,0,0,.4)}',
     '.lk-egg .lk-btn-make{background:linear-gradient(#7fd88f,#3f8a5a);color:#fff;box-shadow:0 4px 0 #22573a,0 10px 24px rgba(0,0,0,.35);text-shadow:0 1px 2px rgba(0,0,0,.35)}',
-    '.lk-egg .lk-btn-make[hidden]{display:none}',
+    '.lk-egg .lk-btn-make[hidden],.lk-egg .lk-btn-gallery[hidden]{display:none}',
+    '.lk-mine{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}',
+    '.lk-egg .lk-btn-gallery{background:linear-gradient(#b9a4ff,#7a5ad8);color:#fff;box-shadow:0 4px 0 #4a2f9a,0 10px 24px rgba(0,0,0,.35);text-shadow:0 1px 2px rgba(0,0,0,.35)}',
     '.lk-making .lk-toast{top:30%}',
-    '.lk-making .lk-bottom,.lk-making .lk-bottom *,.lk-making .lk-title,.lk-making .lk-labels,.lk-making .lk-close{opacity:0;pointer-events:none!important;transition:opacity .3s}',
+    '.lk-making .lk-bottom,.lk-making .lk-bottom *,.lk-making .lk-title,.lk-making .lk-labels,.lk-making .lk-close,.lk-making .lk-sound{opacity:0;pointer-events:none!important;transition:opacity .3s}',
     '.lk-btn:focus-visible,.lk-close:focus-visible{outline:3px solid #7bdff2;outline-offset:3px}',
     '.lk-egg .lk-close{pointer-events:auto;position:absolute;top:max(14px,env(safe-area-inset-top));right:14px;width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(255,255,255,.4);background:rgba(20,8,60,.45);color:#fff;font-size:18px;line-height:1;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
     '.lk-toast{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);max-width:min(88vw,520px);text-align:center;font-size:clamp(16px,2.6vw,22px);padding:12px 24px;border-radius:22px;background:linear-gradient(135deg,rgba(255,235,180,.22),rgba(255,180,120,.1));border:1.5px solid rgba(255,226,122,.7);box-shadow:0 0 30px rgba(255,190,90,.35);color:#fff6d6;text-shadow:0 2px 6px rgba(0,0,0,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);pointer-events:none;animation:lk-toast 3.6s ease forwards}',
@@ -1497,6 +1500,43 @@
       disposeKrathong(old);
     }
 
+    // a picture of a krathong for thumbnails (shelf, gallery): rendered off-screen, one at a time
+    var snap = null;
+    function snapshot(look) {
+      if (!snap) {
+        var ss = new THREE.Scene(); ss.background = new THREE.Color(0x3a2418);
+        ss.add(new THREE.HemisphereLight(0xffe6c8, 0x3a2418, 0.95));
+        var sl = new THREE.DirectionalLight(0xffd7a0, 0.8); sl.position.set(3, 8, 5); ss.add(sl);
+        var sc = new THREE.PerspectiveCamera(36, 1, 0.1, 50); sc.position.set(0, 3.4, 5.6); sc.lookAt(0, 0.5, 0);
+        var rt = new THREE.WebGLRenderTarget(256, 256); rt.texture.encoding = THREE.sRGBEncoding;
+        snap = { scene: ss, cam: sc, rt: rt, queue: Promise.resolve() };
+      }
+      var job = snap.queue.then(function () {
+        return new Promise(function (resolve) {
+          if (!running) { resolve(null); return; }
+          var k = makeKrathong(0, look, null); k.rotation.y = -0.5; snap.scene.add(k);
+          setTimeout(function () {   // give a photo texture a moment to decode
+            var url = null;
+            try {
+              renderer.setRenderTarget(snap.rt); renderer.render(snap.scene, snap.cam);
+              var px = new Uint8Array(256 * 256 * 4);
+              renderer.readRenderTargetPixels(snap.rt, 0, 0, 256, 256, px);
+              var cv = document.createElement('canvas'); cv.width = cv.height = 256;
+              var cx = cv.getContext('2d'), img = cx.createImageData(256, 256);
+              for (var y = 0; y < 256; y++) img.data.set(px.subarray((255 - y) * 1024, (256 - y) * 1024), y * 1024);
+              cx.putImageData(img, 0, 0);
+              url = cv.toDataURL('image/jpeg', 0.85);
+            } catch (e) { url = null; }
+            renderer.setRenderTarget(null);
+            snap.scene.remove(k); disposeKrathong(k);
+            resolve(url);
+          }, 160);
+        });
+      });
+      snap.queue = job.catch(function () { return null; });
+      return job;
+    }
+
     // ---- โต๊ะทำกระทง: a second little scene (wooden table, lamp, banana trunk) drawn instead of the river
     // while someone builds their krathong. The krathong on the board is built by the same makeKrathong as
     // on the river, from the same design, so what you make is exactly what everyone sees.
@@ -1620,7 +1660,7 @@
         if (!st8.active || slice) return;
         setNdc(e);
         if (st8.mode === 'cut') { st8.drag = { cut: true }; moveKnife(e); return; }
-        var idx = st8.tool ? -1 : pickItem();
+        var idx = st8.tool || st8.view ? -1 : pickItem();
         st8.drag = { x: e.clientX, y: e.clientY, idx: idx, moved: false, yaw: st8.yaw };
         if (idx >= 0) { st8.sel = idx; updateRing(); if (st8.hooks.select) st8.hooks.select(idx); }
         try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* old browser */ }
@@ -1646,7 +1686,7 @@
         if (!dr) return;
         if (dr.cut) { doCut(); return; }
         if (dr.idx >= 0) { if (dr.moved && st8.hooks.change) st8.hooks.change(); return; }
-        if (dr.moved) return;
+        if (dr.moved || st8.view) return;
         // a tap: place the chosen thing here, or deselect
         setNdc(e);
         if (st8.tool) {
@@ -1733,8 +1773,10 @@
           cam.updateProjectionMatrix();
         },
         // look is shared with the workshop UI: the table edits look.design.items in place and calls hooks.change()
-        open: function (look, hooks) {
+        // opts.view: look only (gallery) - spin it, nothing can be picked or placed
+        open: function (look, hooks, opts) {
           st8.active = true; st8.look = look; st8.hooks = hooks || {}; st8.mode = 'build'; st8.tool = null; st8.sel = -1; st8.yaw = -0.5;
+          st8.view = !!(opts && opts.view);
           cam.position.set(0, 6, 10);
           rebuild();
         },
@@ -2580,6 +2622,7 @@
       launchFront: launchFront,
       launchRandom: launchRandom,
       setHeroLook: setHeroLook,
+      snapshot: snapshot,
       table: table,
       dispose: function () {
         running = false; cancelAnimationFrame(raf);
@@ -2875,7 +2918,8 @@
       '  </div>' +
       '  <div class="lk-bottom">' +
       '    <div class="lk-hint">แตะบนผิวน้ำเพื่อลอยกระทง หรือพิมพ์คำอธิษฐานด้านล่าง</div>' +
-      '    <button type="button" class="lk-btn lk-btn-make" hidden>✂️ ทำกระทงของฉัน</button>' +
+      '    <div class="lk-mine"><button type="button" class="lk-btn lk-btn-make" hidden>✂️ ทำกระทงของฉัน</button>' +
+      '    <button type="button" class="lk-btn lk-btn-gallery" hidden>🏛 กระทงทุกคน</button></div>' +
       '    <label class="lk-name-row"><span>ลอยในนาม</span>' +
       '      <input class="lk-name-input" type="text" maxlength="40" placeholder="ไม่ระบุชื่อ" aria-label="ชื่อที่จะแสดงบนกระทง" autocomplete="nickname">' +
       '      <span class="lk-name-edit" aria-hidden="true">✎</span></label>' +
@@ -2994,48 +3038,71 @@
       });
     }
 
-    // the person's own krathong from the workshop: { design, photo (JPEG data URL) }, kept on this device
-    var DZ = global.LoyKrathongDesign, WS = global.LoyKrathongWorkshop, LOOK_KEY = 'lk-look';
-    function loadLook() {
-      if (!DZ) return null;
-      try {
-        var l = JSON.parse(safeGet(LOOK_KEY) || 'null');
-        if (!l || typeof l !== 'object') return null;
-        var d = DZ.sanitize(l.design), ph = DZ.photoOk(l.photo) ? l.photo : null;
-        return d || ph ? { design: d, photo: ph } : null;
-      } catch (e) { return null; }
-    }
-    var myLook = opts.screen || opts.demo ? null : loadLook();
-    var makeBtn = root.querySelector('.lk-btn-make');
+    // the person's krathongs live on a shelf on this device (shelf.js); the selected one is what they float
+    var DZ = global.LoyKrathongDesign, WS = global.LoyKrathongWorkshop, SH = global.LoyKrathongShelf, GA = global.LoyKrathongGallery;
+    var mineOk = !!(WS && DZ && SH && opts.workshop && !opts.screen && !opts.demo);
+    var shelf = mineOk ? SH.createShelf((function () { try { return global.localStorage; } catch (e) { return null; } })()) : null;
+    var myLook = null, myKid = null;
+    var makeBtn = root.querySelector('.lk-btn-make'), galleryBtn = root.querySelector('.lk-btn-gallery');
     var floatBtn = root.querySelector('.lk-btn-float'), hintEl = root.querySelector('.lk-hint'), wishInput = root.querySelector('.lk-wish input');
     function renderMine() {
       floatBtn.textContent = myLook ? 'ลอยกระทงของฉัน' : 'ลอยกระทง';
       hintEl.textContent = myLook
         ? 'กด ลอยกระทงของฉัน ได้เลย จะพิมพ์คำอธิษฐานก่อนก็ได้ หรือแตะผิวน้ำเพื่อลอยเล่น'
         : 'แตะบนผิวน้ำเพื่อลอยกระทง หรือพิมพ์คำอธิษฐานด้านล่าง';
-      makeBtn.textContent = myLook ? '✂️ แก้กระทงของฉัน' : '✂️ ทำกระทงของฉัน';
+      if (shelf) makeBtn.textContent = shelf.items().length ? '🧺 กระทงของฉัน (' + shelf.items().length + ')' : '✂️ ทำกระทงของฉัน';
     }
-    if (WS && DZ && opts.workshop && !opts.screen && !opts.demo) {
-      makeBtn.hidden = false;
+    function syncLook() {
+      var it = shelf && shelf.selected();
+      myLook = it ? it.look : null; myKid = it ? it.kid : null;
       renderMine();
-      makeBtn.addEventListener('click', function () {
-        if (!scene) return;
-        root.classList.add('lk-making');
-        WS.open({
-          container: root, look: myLook, toast: toast, table: scene.table,
-          onDone: function (look) {
-            root.classList.remove('lk-making');
-            if (look !== undefined) {   // undefined = cancelled
-              myLook = look;
-              try { if (look) safeSet(LOOK_KEY, JSON.stringify(look)); else global.localStorage.removeItem(LOOK_KEY); } catch (e) { /* storage full: keep it for this visit */ }
-              renderMine();
-              if (myLook && myLook.photo && !clip(nameInput.value, 40)) { toast('ใส่ชื่อด้วยนะ กระทงที่มีรูปต้องมีชื่อเจ้าของ'); nameInput.focus({ preventScroll: true }); }
-              else if (myLook) { toast('✨ กระทงของคุณพร้อมลอยแล้ว กด ลอยกระทงของฉัน ได้เลย'); floatBtn.focus({ preventScroll: true }); }
-            }
-            if (scene) scene.setHeroLook(myLook);
-          }
-        });
+      if (scene) scene.setHeroLook(myLook);
+    }
+    function snapshot(look) { return scene && scene.snapshot ? scene.snapshot(look) : Promise.resolve(null); }
+    function openWorkshop(kid) {
+      if (!scene) return;
+      var editing = kid ? shelf.get(kid) : null;
+      root.classList.add('lk-making');
+      WS.open({
+        container: root, look: editing ? editing.look : null, toast: toast, table: scene.table,
+        onDone: function (look) {
+          root.classList.remove('lk-making');
+          if (look !== undefined) {   // undefined = cancelled
+            if (editing) { shelf.update(editing.kid, look); shelf.select(editing.kid); }
+            else if (!shelf.add(look)) toast('ชั้นวางเต็มแล้ว ลบกระทงเก่าก่อนนะ');
+            if (!shelf.lastSaveOk()) toast('เครื่องนี้เก็บกระทงเพิ่มไม่ได้แล้ว ลองลบใบที่มีรูปออกบ้างนะ');
+            syncLook();
+            if (myLook && myLook.photo && !clip(nameInput.value, 40)) { toast('ใส่ชื่อด้วยนะ กระทงที่มีรูปต้องมีชื่อเจ้าของ'); nameInput.focus({ preventScroll: true }); }
+            else if (myLook) { toast('✨ กระทงของคุณพร้อมลอยแล้ว กด ลอยกระทงของฉัน ได้เลย'); floatBtn.focus({ preventScroll: true }); }
+          } else syncLook();
+        }
       });
+    }
+    function openShelf() {
+      if (!scene) return;
+      if (!shelf.items().length) { openWorkshop(null); return; }
+      SH.open({
+        container: root, shelf: shelf, snapshot: snapshot, toast: toast,
+        onPick: function () { syncLook(); },
+        onEdit: function (kid) { openWorkshop(kid); },
+        onNew: function () { openWorkshop(null); },
+        onClose: function () { syncLook(); }
+      });
+    }
+    function openGallery() {
+      if (!scene || !GA) return;
+      root.classList.add('lk-making');
+      GA.open({
+        container: root, table: scene.table, snapshot: snapshot, toast: toast, client: clientId(),
+        base: lookBase ? lookBase.replace(/\/look$/, '') : '/api', fetchLook: fetchLook,
+        onClose: function () { root.classList.remove('lk-making'); }
+      });
+    }
+    if (mineOk) {
+      makeBtn.hidden = false;
+      makeBtn.addEventListener('click', openShelf);
+      if (GA && lookBase) { galleryBtn.hidden = false; galleryBtn.addEventListener('click', openGallery); }
+      syncLook();
     }
     function feedLoop() {
       if (closed) return;
@@ -3088,6 +3155,8 @@
     function close() {
       if (closed) return; closed = true;
       if (WS && WS.close) WS.close();
+      if (SH && SH.close) SH.close();
+      if (GA && GA.close) GA.close();
       root.classList.remove('lk-in');
       if (audio) audio.stop();
       demoTimers.forEach(clearTimeout);
@@ -3119,9 +3188,14 @@
       }
       var look = myLook || {};
       if (feed && wish) {   // share it so other users may see it
-        Promise.resolve(feed.save({ name: shownName, wish: wish, design: look.design && DZ ? DZ.sanitize(look.design) : null, photo: look.photo || null })).then(function (r) {
+        var floatKid = myLook ? myKid : null;
+        Promise.resolve(feed.save({ name: shownName, wish: wish, design: look.design && DZ ? DZ.sanitize(look.design) : null, photo: look.photo || null, kid: floatKid })).then(function (r) {
           if (closed || !r) return;
-          if (r.ok) { if (r.id) feedState.mine[r.id] = 1; setTimeout(function () { if (!closed) toast(MSG_SHARED); }, 1800); }
+          if (r.ok) {
+            if (r.id) feedState.mine[r.id] = 1;
+            if (floatKid && shelf) { shelf.markFloated(floatKid); renderMine(); }
+            setTimeout(function () { if (!closed) toast(floatKid ? '🪷 กระทงของคุณลอยไปให้ทุกคนเห็นแล้ว ดูได้ใน 🏛 กระทงทุกคน' : MSG_SHARED); }, 1800);
+          }
           else if (r.status === 422) toast(MSG_BLOCKED);
           else if (r.status === 429) toast(MSG_TOO_FAST);
           else if (r.status === 413 || r.error === 'bad_photo') toast('รูปนี้ส่งไม่ได้ ลองเลือกรูปใหม่ในโรงทำกระทงนะ');
@@ -3157,7 +3231,7 @@
             }
           });
           if (opts.demo) startDemo();
-          if (myLook) scene.setHeroLook(myLook);
+          if (myLook) scene.setHeroLook(myLook);   // the selected krathong from the shelf
           startFeed();
         } catch (err) {
           fallback(); return;   // WebGL unavailable: keep the 2D greeting
