@@ -21,14 +21,13 @@ test('memory store allow: per-client window, per-IP cap', async () => {
   t += 60001; assert.equal(await s.allow({ client: 'b', ip: 'ip' }), true);
 });
 
-test('memory store keeps design and photo like the Redis store', async () => {
+test('memory store keeps looks like the Redis store', async () => {
   const s = createMemoryStore();
-  const d = { base: 2, flowers: 0, topper: 1, leafColor: 0, leaf: null };
-  const id = await s.add({ name: 'a', wish: '1', design: d, photo: 'data:image/jpeg;base64,/9j/' });
+  const id = await s.add({ name: 'a', wish: '1', design: { v: 2 }, photo: null });
   await s.add({ name: 'b', wish: '2' });
   const out = await s.list(50);
-  assert.deepEqual(out.wishes[1], { id, name: 'a', wish: '1', design: d, photo: true });
+  assert.deepEqual(out.wishes[1], { id, name: 'a', wish: '1', look: true });
   assert.deepEqual(Object.keys(out.wishes[0]).sort(), ['id', 'name', 'wish']);
-  assert.equal(await s.photo(id), 'data:image/jpeg;base64,/9j/');
-  assert.equal(await s.photo('nope'), null);
+  assert.deepEqual(await s.look(id), { design: { v: 2 }, photo: null });
+  assert.equal(await s.look('nope'), null);
 });

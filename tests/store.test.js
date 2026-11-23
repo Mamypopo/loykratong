@@ -56,21 +56,23 @@ test('a Redis error surfaces as a rejected promise', async () => {
   await assert.rejects(store.list(10));
 });
 
-test('add stores the design with the wish and the photo under its own key with the same TTL', async () => {
+test('add stores a look (design + photo) under its own key with the same TTL and flags the wish', async () => {
   const f = fakeFetch([[{ result: 1 }, { result: 'OK' }, { result: 1 }, { result: 5 }, { result: 'OK' }]]);
   const store = createStore({ url: 'https://r', token: 't', fetch: f });
-  const design = { base: 6, flowers: 1, topper: 2, leafColor: 0, leaf: [[0.5, 0], [1, 1], [0, 1]] };
+  const design = { v: 2, base: 6 };
   const id = await store.add({ name: 'a', wish: 'b', design, photo: 'data:image/jpeg;base64,/9j/' });
   const body = f.calls[0].body;
-  assert.deepEqual(JSON.parse(body[0][2]), { id, name: 'a', wish: 'b', design, photo: 1 });
-  assert.deepEqual(body[4], ['SET', 'lk:img:' + id, 'data:image/jpeg;base64,/9j/', 'EX', '604800']);
+  assert.deepEqual(JSON.parse(body[0][2]), { id, name: 'a', wish: 'b', look: 1 });
+  assert.deepEqual(body[4].slice(0, 2), ['SET', 'lk:look:' + id]);
+  assert.deepEqual(JSON.parse(body[4][2]), { design, photo: 'data:image/jpeg;base64,/9j/' });
+  assert.deepEqual(body[4].slice(3), ['EX', '604800']);
 });
 
-test('list returns design and photo flag; photo(id) reads the image key', async () => {
-  const d = { base: 1, flowers: 0, topper: 0, leafColor: 0, leaf: null };
-  const f = fakeFetch([[{ result: [JSON.stringify({ id: 'x', name: 'n', wish: 'w', design: d, photo: 1 })] }, { result: '1' }], [{ result: 'data:image/jpeg;base64,/9j/' }]]);
+test('list flags wishes that have a look; look(id) reads and parses it', async () => {
+  const f = fakeFetch([[{ result: [JSON.stringify({ id: 'x', name: 'n', wish: 'w', look: 1 })] }, { result: '1' }], [{ result: '{"design":{"v":2},"photo":null}' }], [{ result: null }]]);
   const store = createStore({ url: 'https://r', token: 't', fetch: f });
-  assert.deepEqual((await store.list(50)).wishes, [{ id: 'x', name: 'n', wish: 'w', design: d, photo: true }]);
-  assert.equal(await store.photo('x'), 'data:image/jpeg;base64,/9j/');
-  assert.deepEqual(f.calls[1].body, [['GET', 'lk:img:x']]);
+  assert.deepEqual((await store.list(50)).wishes, [{ id: 'x', name: 'n', wish: 'w', look: true }]);
+  assert.deepEqual(await store.look('x'), { design: { v: 2 }, photo: null });
+  assert.deepEqual(f.calls[1].body, [['GET', 'lk:look:x']]);
+  assert.equal(await store.look('y'), null);
 });

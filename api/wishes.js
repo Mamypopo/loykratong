@@ -5,7 +5,7 @@ const { check, HIDDEN } = require('../public/filter.js');
 const { storeFromEnv } = require('../lib/store.js');
 const design = require('../public/design.js');
 
-const MAX_NAME = 40, MAX_WISH = 80, MAX_BODY = 49152, LIST_SIZE = 50;
+const MAX_NAME = 40, MAX_WISH = 80, MAX_BODY = 81920, LIST_SIZE = 50;
 
 function clean(s, n) {
   return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(HIDDEN, '').replace(/\s+/g, ' ').trim().slice(0, n);

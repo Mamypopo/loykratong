@@ -192,7 +192,7 @@
     var fresh = [], pool = [];
     (list || []).forEach(function (e) {
       var item = { id: e && e.id != null ? String(e.id) : '', name: clip(e && e.name, 40), wish: clip(e && e.wish, 80),
-        design: e && e.design && typeof e.design === 'object' ? e.design : null, photo: !!(e && e.photo) };
+        look: !!(e && e.look) };
       if (!item.wish) return;
       var key = item.id || item.name + '|' + item.wish;
       if (state.mine[key]) return;
@@ -294,7 +294,7 @@
     '.lk-egg .lk-btn-enter{background:linear-gradient(#ffffff,#ece4ff);color:#3b1a6e;border-radius:999px;padding:12px 30px;font-size:16px;box-shadow:0 5px 0 #8a6bd1,0 12px 28px rgba(0,0,0,.4)}',
     '.lk-egg .lk-btn-make{background:linear-gradient(#7fd88f,#3f8a5a);color:#fff;box-shadow:0 4px 0 #22573a,0 10px 24px rgba(0,0,0,.35);text-shadow:0 1px 2px rgba(0,0,0,.35)}',
     '.lk-egg .lk-btn-make[hidden]{display:none}',
-    '.lk-making .lk-toast{top:14%}',
+    '.lk-making .lk-toast{top:30%}',
     '.lk-making .lk-bottom,.lk-making .lk-bottom *,.lk-making .lk-title,.lk-making .lk-labels,.lk-making .lk-close{opacity:0;pointer-events:none!important;transition:opacity .3s}',
     '.lk-btn:focus-visible,.lk-close:focus-visible{outline:3px solid #7bdff2;outline-offset:3px}',
     '.lk-egg .lk-close{pointer-events:auto;position:absolute;top:max(14px,env(safe-area-inset-top));right:14px;width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(255,255,255,.4);background:rgba(20,8,60,.45);color:#fff;font-size:18px;line-height:1;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
@@ -401,7 +401,6 @@
     var camFinal = new THREE.Vector3(0, 3.4, 12);
     var lookFinal = new THREE.Vector3(0, 2.2, -12);
     var camStart = new THREE.Vector3(0, 16, 30);
-    var focus = 0, focusTarget = 0, focusPos = new THREE.Vector3(), focusLook = new THREE.Vector3();
     var lookStart = new THREE.Vector3(0, 22, -60);
     camera.position.copy(reduced ? camFinal : camStart);
 
@@ -1243,7 +1242,7 @@
     }
 
     var STYLES = [styleClassic, styleLotus, styleBread, styleCoconut, styleSwan, styleTurtle];
-    var DZ = global.LoyKrathongDesign || null;   // design.js: designs from the workshop and other people
+    var DZ = global.LoyKrathongDesign || null;   // design.js: krathongs people made at the workshop table
 
     // a petal cut from the outline someone drew (points 0..1, y up), folded along its centre and curled out at the tip
     function cutLeafGeo(points, tone, size) {
@@ -1263,76 +1262,184 @@
       return geo;
     }
 
-    // 7) cut-your-own krathong: banana-trunk base, petals in the shape the person cut
+    // cut face of a banana trunk: creamy sponge with rings of leaf sheaths
+    var trunkTopMat = null;
+    function trunkTop() {
+      if (trunkTopMat) return trunkTopMat;
+      var tex = canvasTex(256, 256, function (ctx) {
+        ctx.fillStyle = '#efe8c6'; ctx.fillRect(0, 0, 256, 256);
+        for (var r = 124; r > 10; r -= 13 + (r % 3) * 3) {
+          ctx.strokeStyle = r > 100 ? 'rgba(90,140,60,.85)' : 'rgba(150,160,100,.5)'; ctx.lineWidth = r > 100 ? 5 : 2;
+          ctx.beginPath(); ctx.arc(128, 128, r, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.fillStyle = 'rgba(170,160,110,.35)';
+        for (var i = 0; i < 260; i++) { var a = (i * 2.4) % 6.28, rr = (i * 37) % 118; ctx.beginPath(); ctx.arc(128 + Math.cos(a) * rr, 128 + Math.sin(a) * rr, 1.6, 0, 6.28); ctx.fill(); }
+      });
+      trunkTopMat = toon(0xffffff, { map: tex });
+      return trunkTopMat;
+    }
+    var trunkSideMat = toon(0xb9c77a);
+    function trunkGeo(h) { return new THREE.CylinderGeometry(1, 1.04, h, 28); }
+
+    // 7) cut-your-own krathong: a slice of banana trunk as tall as you cut it, petals in the shape you drew
     function styleCustom(g, set, d) {
       var tone = DZ.LEAF_TONES[d.leafColor] || DZ.LEAF_TONES[0];
       var pts = d.leaf || DZ.PRESET_LEAVES[0].points;
-      g.add(withOutline(new THREE.Mesh(geoCache.base, mats.base)));
-      var band = withOutline(new THREE.Mesh(geoCache.band, mats.band)); band.position.y = 0.02; g.add(band);
-      var big = cutLeafGeo(pts, tone, 1), small = cutLeafGeo(pts, tone, 0.7), leaves = [];
-      petalRing(leaves, big, 11, 1.0, 0.17, 0.42, 0, false);
-      petalRing(leaves, small, 9, 0.78, 0.2, 0.22, Math.PI / 9, false);
+      var h = d.trunk, bottom = -0.19, top = bottom + h;
+      var base = withOutline(new THREE.Mesh(trunkGeo(h), [trunkSideMat, trunkTop(), trunkTop()]));
+      base.position.y = bottom + h / 2; g.add(base);
+      var band = withOutline(new THREE.Mesh(geoCache.band, mats.band)); band.position.y = top - 0.17; g.add(band);
+      var n = d.petals, big = cutLeafGeo(pts, tone, 1), small = cutLeafGeo(pts, tone, 0.7), leaves = [];
+      petalRing(leaves, big, n, 1.0, top - 0.02, 0.42, 0, false);
+      petalRing(leaves, small, Math.max(4, n - 2), 0.78, top + 0.01, 0.22, Math.PI / n, false);
       g.add(new THREE.Mesh(merge(leaves), mats.leaf));
       big.dispose(); small.dispose();
-      var dome = withOutline(new THREE.Mesh(geoCache.dome, mats.dome)); dome.position.y = 0.18; dome.scale.y = 0.75; g.add(dome);
-      var fl = [];
-      domeFlowers(fl, set, 0.62, 0.2, 14);
-      addMerged(g, fl, false);
-      return { top: 0.65, cx: -0.08, cz: 0.05, coins: [[0, 0.28, 1.22, 0], [0.27, 0.25, 1.19, 0.3]] };
+      var dome = withOutline(new THREE.Mesh(geoCache.dome, mats.dome)); dome.position.y = top - 0.01; dome.scale.y = 0.75; g.add(dome);
+      return { top: top + 0.46, cx: 0, cz: 0, coins: [[0, top + 0.09, 1.22, 0], [0.27, top + 0.06, 1.19, 0.3]] };
     }
 
-    // silly extras from the workshop, placed beside the candle
-    function addTopper(g, cfg, t) {
-      if (!t) return;
-      var p = [], x = cfg.cx, y = cfg.top, z = cfg.cz;
-      if (t === 1) {   // one more bunch of incense
-        incense(p, x + 0.3, y - 0.15, z + 0.2);
-      } else if (t === 2) {   // fried egg
-        p.push({ geo: S(1, 16, 8), color: 0xfffaf0, m: M(x + 0.38, y + 0.02, z + 0.18, null, 0.3, 0.035, 0.26) });
-        p.push({ geo: S(1, 12, 8), color: 0xffb300, m: M(x + 0.4, y + 0.07, z + 0.18, null, 0.1, 0.07, 0.1) });
-      } else if (t === 3) {   // rubber duck
-        var dx = x + 0.42, dy = y + 0.08, dz = z + 0.1;
-        p.push({ geo: S(1, 16, 12), color: 0xffd600, m: M(dx, dy, dz, null, 0.2, 0.15, 0.25) });
-        p.push({ geo: S(0.13, 14, 10), color: 0xffd600, m: M(dx, dy + 0.2, dz + 0.13) });
-        p.push({ geo: new THREE.ConeGeometry(0.05, 0.12, 8), color: 0xff7a00, m: M(dx, dy + 0.18, dz + 0.28, E(Math.PI / 2, 0, 0)) });
-        [-1, 1].forEach(function (s) { p.push({ geo: S(0.025, 6, 4), color: 0x1b1030, m: M(dx + 0.06 * s, dy + 0.25, dz + 0.23) }); });
-      } else if (t === 4) {   // party hat
-        var q = E(0, 0, 0.35);
-        p.push({ geo: new THREE.ConeGeometry(0.17, 0.45, 14), color: 0xff4f93, m: M(x - 0.38, y + 0.2, z, q) });
-        p.push({ geo: new THREE.TorusGeometry(0.15, 0.03, 6, 16), color: 0xffe14d, m: M(x - 0.36, y + 0.03, z, E(Math.PI / 2, 0, 0)) });
-        p.push({ geo: S(0.06, 8, 6), color: 0x7bdff2, m: M(x - 0.46, y + 0.43, z) });
-      } else if (t === 5) {   // heart
-        var hx = x + 0.42, hy = y + 0.35, hz = z;
-        p.push({ geo: S(0.12, 12, 10), color: 0xff3b6b, m: M(hx - 0.085, hy, hz) });
-        p.push({ geo: S(0.12, 12, 10), color: 0xff3b6b, m: M(hx + 0.085, hy, hz) });
-        p.push({ geo: new THREE.ConeGeometry(0.17, 0.26, 14), color: 0xff3b6b, m: M(hx, hy - 0.16, hz, E(Math.PI, 0, 0)) });
+    // ---- things people stick on their krathong; each builds parts around its own base point (0,0,0)
+    var ITEM_PARTS = [
+      function candle(p) {   // extra candles: wax + a static little flame (the main candle is animated)
+        p.push({ geo: geoCache.candle, color: 0xfff6dc, m: M(0, 0.3, 0) });
+        p.push({ geo: geoCache.flame, color: 0xffe08a, m: M(0, 0.71, 0) });
+      },
+      function incense(p) { [-1, 0, 1].forEach(function (s) {
+        p.push({ geo: new THREE.CylinderGeometry(0.018, 0.018, 0.9, 5), color: 0x8a4b2a, m: M(s * 0.05, 0.45, 0, E(0, 0, s * 0.12)) });
+        p.push({ geo: S(0.035, 6, 4), color: 0xff4b2b, m: M(s * 0.05 - s * 0.055, 0.9, 0) });
+      }); },
+      function marigold(p) {
+        p.push({ geo: new THREE.IcosahedronGeometry(1, 1), color: 0xffa31a, m: M(0, 0.13, 0, null, 0.17, 0.13, 0.17) });
+        p.push({ geo: new THREE.IcosahedronGeometry(1, 1), color: 0xffc43d, m: M(0, 0.2, 0, null, 0.11, 0.08, 0.11) });
+      },
+      function rose(p) {
+        p.push({ geo: S(1, 12, 10), color: 0xd81b3c, m: M(0, 0.13, 0, null, 0.15, 0.13, 0.15) });
+        p.push({ geo: new THREE.TorusGeometry(0.1, 0.045, 6, 14), color: 0xff3b5c, m: M(0, 0.2, 0, E(Math.PI / 2, 0, 0)) });
+        p.push({ geo: S(0.06, 8, 6), color: 0xa3122e, m: M(0, 0.24, 0) });
+      },
+      function jasmine(p) { for (var i = 0; i < 6; i++) { var a = i / 6 * 6.28;
+        p.push({ geo: S(0.055, 8, 6), color: 0xffffff, m: M(Math.cos(a) * 0.09, 0.06 + (i % 2) * 0.05, Math.sin(a) * 0.09) }); }
+        p.push({ geo: S(0.05, 8, 6), color: 0xfff6c8, m: M(0, 0.12, 0) });
+      },
+      function amaranth(p) { [[-0.08, 0.05], [0.08, -0.03], [0, 0.09]].forEach(function (o, i) {
+        p.push({ geo: new THREE.CylinderGeometry(0.012, 0.012, 0.25, 4), color: 0x3f8a3a, m: M(o[0], 0.12, o[1]) });
+        p.push({ geo: S(0.07, 10, 8), color: i % 2 ? 0x8e24aa : 0xd81b60, m: M(o[0], 0.27, o[1]) });
+      }); },
+      function bud(p) {
+        p.push({ geo: S(1, 14, 10), color: 0xff86b5, m: M(0, 0.25, 0, null, 0.12, 0.24, 0.12) });
+        p.push({ geo: new THREE.ConeGeometry(0.06, 0.14, 10), color: 0xff4f93, m: M(0, 0.52, 0) });
+        p.push({ geo: new THREE.CylinderGeometry(0.1, 0.06, 0.08, 10), color: 0x3f8a3a, m: M(0, 0.04, 0) });
+      },
+      function coin(p) { p.push({ geo: geoCache.coin, color: 0xffc93c, m: M(0, 0.15, 0, E(Math.PI / 2 - 0.35, 0, 0)) }); },
+      function duck(p) {
+        p.push({ geo: S(1, 16, 12), color: 0xffd600, m: M(0, 0.15, 0, null, 0.2, 0.15, 0.25) });
+        p.push({ geo: S(0.13, 14, 10), color: 0xffd600, m: M(0, 0.35, 0.13) });
+        p.push({ geo: new THREE.ConeGeometry(0.05, 0.12, 8), color: 0xff7a00, m: M(0, 0.33, 0.28, E(Math.PI / 2, 0, 0)) });
+        [-1, 1].forEach(function (s) { p.push({ geo: S(0.025, 6, 4), color: 0x1b1030, m: M(0.06 * s, 0.4, 0.23) }); });
+      },
+      function egg(p) {
+        p.push({ geo: S(1, 16, 8), color: 0xfffaf0, m: M(0, 0.03, 0, null, 0.3, 0.035, 0.26) });
+        p.push({ geo: S(1, 12, 8), color: 0xffb300, m: M(0.02, 0.08, 0, null, 0.1, 0.07, 0.1) });
+      },
+      function hat(p) {
+        p.push({ geo: new THREE.ConeGeometry(0.17, 0.45, 14), color: 0xff4f93, m: M(0, 0.24, 0) });
+        p.push({ geo: new THREE.TorusGeometry(0.15, 0.03, 6, 16), color: 0xffe14d, m: M(0, 0.05, 0, E(Math.PI / 2, 0, 0)) });
+        p.push({ geo: S(0.06, 8, 6), color: 0x7bdff2, m: M(0, 0.48, 0) });
+      },
+      function heart(p) {
+        p.push({ geo: S(0.12, 12, 10), color: 0xff3b6b, m: M(-0.085, 0.42, 0) });
+        p.push({ geo: S(0.12, 12, 10), color: 0xff3b6b, m: M(0.085, 0.42, 0) });
+        p.push({ geo: new THREE.ConeGeometry(0.17, 0.26, 14), color: 0xff3b6b, m: M(0, 0.26, 0, E(Math.PI, 0, 0)) });
+        p.push({ geo: new THREE.CylinderGeometry(0.012, 0.012, 0.2, 4), color: 0x3f8a3a, m: M(0, 0.1, 0) });
       }
-      if (p.length) addMerged(g, p, true);
+    ];
+    var INK = DZ ? DZ.INK : ['#1b1030'];
+
+    function itemMatrix(it) { return M(it.p[0], it.p[1], it.p[2], E(0, it.r, 0), it.s); }
+
+    // a drawing as a paper sticker on a stick: strokes on a transparent canvas with a white cut-out border
+    function doodleMesh(doodle, s) {
+      var tex = canvasTex(256, 256, function (ctx) {
+        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        [true, false].forEach(function (border) {
+          doodle.s.forEach(function (st) {
+            ctx.strokeStyle = border ? '#ffffff' : INK[st.c] || INK[0];
+            ctx.fillStyle = ctx.strokeStyle;
+            var w = 5 + st.w * 5 + (border ? 14 : 0);
+            if (st.p.length === 1) { ctx.beginPath(); ctx.arc(st.p[0][0] * 216 + 20, st.p[0][1] * 216 + 20, w / 2, 0, 6.28); ctx.fill(); return; }
+            ctx.lineWidth = w; ctx.beginPath();
+            st.p.forEach(function (q, i) { var x = q[0] * 216 + 20, y = q[1] * 216 + 20; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+            ctx.stroke();
+          });
+        });
+      });
+      var mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide });
+      var mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), mat);
+      mesh.position.y = 0.62; mesh.userData.ownMap = true;
+      var grp = new THREE.Group(); grp.add(mesh);
+      var stick = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.25, 4), mats.candle); stick.position.y = 0.12; grp.add(stick);
+      return grp;
     }
 
-    // the person's photo as a little polaroid above the krathong (always faces the camera)
-    function addPhoto(g, cfg, url) {
+    // the person's photo as a polaroid that always faces the camera
+    function photoSprite(url) {
       var mat = new THREE.SpriteMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
       var s = new THREE.Sprite(mat);
-      s.scale.set(0.95, 0.95 * 190 / 160, 1);
-      s.position.set(cfg.cx + 0.75, cfg.top + 0.75, cfg.cz);
+      s.scale.set(0.8, 0.8 * 190 / 160, 1);
+      s.position.y = 0.5;
       s.userData.ownMap = true;
-      g.add(s);
       new THREE.TextureLoader().load(url, function (tex) {
         if (!s.parent) { tex.dispose(); return; }
         tex.encoding = THREE.sRGBEncoding;
         mat.map = tex; mat.opacity = 1; mat.needsUpdate = true;
-      }, undefined, function () { /* photo gone or blocked: no polaroid */ });
+      }, undefined, function () { /* photo blocked: no polaroid */ });
+      return s;
     }
 
-    // look = { design?, photo? (URL) } from the workshop or another person's wish
-    function makeKrathong(variant, look) {
+    // items: merged into one mesh on the river (cheap); one pickable group per item at the workshop table
+    function addItems(g, d, photo, separate) {
+      var merged = [];
+      d.items.forEach(function (it, idx) {
+        var holder = null;
+        if (separate) { holder = new THREE.Group(); holder.userData.itemIndex = idx; holder.matrixAutoUpdate = true; }
+        var special = null;
+        if (it.k === DZ.ITEM.photo) { if (!photo || env.photos === false) return; special = photoSprite(photo); }
+        else if (it.k === DZ.ITEM.doodle) { var dd = d.doodles[it.d]; if (!dd) return; special = doodleMesh(dd); }
+        if (special) {
+          var wrap = holder || new THREE.Group();
+          wrap.position.set(it.p[0], it.p[1], it.p[2]); wrap.rotation.y = it.r; wrap.scale.setScalar(it.s);
+          wrap.add(special);
+          g.add(wrap);
+          return;
+        }
+        var parts = [], build = ITEM_PARTS[it.k];
+        if (!build) return;
+        build(parts);
+        if (separate) {
+          holder.position.set(it.p[0], it.p[1], it.p[2]); holder.rotation.y = it.r; holder.scale.setScalar(it.s);
+          addMerged(holder, parts, true);
+          if (it.k === DZ.ITEM.candle) { var fl = sprite(flameTex, 0xffffff, 0.7, 1); fl.position.y = 0.74; holder.add(fl); }
+          g.add(holder);
+        } else {
+          var im = itemMatrix(it);
+          parts.forEach(function (q) { q.m = im.clone().multiply(q.m); merged.push(q); });
+          if (it.k === DZ.ITEM.candle) {
+            var fs = sprite(flameTex, 0xffffff, 0.7 * it.s, 1);
+            fs.position.set(0, 0.74, 0).applyMatrix4(im); g.add(fs);
+          }
+        }
+      });
+      if (merged.length) addMerged(g, merged, true);
+    }
+
+    // look = { design?, photo? (URL or data URL) } from the workshop or another person's wish
+    // o.separateItems: one pickable group per item (workshop table)
+    function makeKrathong(variant, look, o) {
       var g = new THREE.Group();
       var d = look && look.design && DZ ? DZ.sanitize(look.design) : null;
       var set = d ? FLOWER_SETS[d.flowers] : variant === 0 ? FLOWER_SETS[0] : FLOWER_SETS[Math.floor(R() * FLOWER_SETS.length)];
       var cfg = d ? (d.base === DZ.CUSTOM_BASE ? styleCustom(g, set, d) : STYLES[d.base](g, set, d.flowers)) : STYLES[variant % STYLES.length](g, set, variant);
-      if (d) addTopper(g, cfg, d.topper);
-      if (look && look.photo && env.photos !== false) addPhoto(g, cfg, look.photo);
+      if (d) addItems(g, d, look.photo || null, !!(o && o.separateItems));
       var cx = cfg.cx, cz = cfg.cz, top = cfg.top;
 
       var candle = withOutline(new THREE.Mesh(geoCache.candle, mats.candle)); candle.position.set(cx, top + 0.3, cz); g.add(candle);
@@ -1373,7 +1480,8 @@
       if (el && el.parentNode) el.parentNode.removeChild(el);
       k.traverse(function (o) {
         if (o.isMesh && o.material !== outlineMat && !isCached(o.geometry)) o.geometry.dispose();
-        if (o.isSprite) { if (o.userData.ownMap && o.material.map) o.material.map.dispose(); o.material.dispose(); }
+        if (o.userData.ownMap && o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+        else if (o.isSprite) o.material.dispose();
       });
     }
     // the workshop restyles the big krathong at the front while you build
@@ -1387,6 +1495,274 @@
       hero = k;
       disposeKrathong(old);
     }
+
+    // ---- โต๊ะทำกระทง: a second little scene (wooden table, lamp, banana trunk) drawn instead of the river
+    // while someone builds their krathong. The krathong on the board is built by the same makeKrathong as
+    // on the river, from the same design, so what you make is exactly what everyone sees.
+    var table = (function () {
+      var ts = new THREE.Scene();
+      ts.background = new THREE.Color(0x2b1a12);
+      ts.fog = new THREE.Fog(0x2b1a12, 14, 32);
+      var cam = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+      ts.add(new THREE.HemisphereLight(0xffe6c8, 0x3a2418, 0.85));
+      var lamp = new THREE.DirectionalLight(0xffd7a0, 0.85); lamp.position.set(3, 9, 5); ts.add(lamp);
+      var fill = new THREE.DirectionalLight(0xb8c8ff, 0.25); fill.position.set(-6, 4, -3); ts.add(fill);
+
+      function woodTex(base, line) {
+        var t = canvasTex(512, 256, function (ctx, w, h) {
+          ctx.fillStyle = base; ctx.fillRect(0, 0, w, h);
+          for (var i = 0; i < 46; i++) {
+            ctx.strokeStyle = line; ctx.globalAlpha = 0.12 + (i % 5) * 0.05; ctx.lineWidth = 1 + (i % 3);
+            var y = (i * 37) % h;
+            ctx.beginPath(); ctx.moveTo(0, y);
+            for (var x = 0; x <= w; x += 32) ctx.lineTo(x, y + Math.sin(x * 0.02 + i) * 5);
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+          for (var p = 1; p < 4; p++) { ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(0, p * h / 4 - 1, w, 2); }   // planks
+        });
+        return t;
+      }
+      var desk = new THREE.Mesh(new THREE.BoxGeometry(16, 0.5, 10), toon(0xffffff, { map: woodTex('#8a5a34', '#4a2a14') }));
+      desk.position.y = -0.46; ts.add(desk);
+      var board = withOutline(new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.95, 0.12, 40), toon(0xffffff, { map: woodTex('#d9a86a', '#8a5a2a') })));
+      board.position.y = -0.25; ts.add(board);
+
+      // banana trunk lying at the back, with a cut face toward the camera's right
+      var trunk = new THREE.Group();
+      var tBody = withOutline(new THREE.Mesh(new THREE.CylinderGeometry(1, 1.04, 4.2, 28), [trunkSideMat, trunkTop(), trunkTop()]));
+      tBody.rotation.z = Math.PI / 2; trunk.add(tBody);
+      for (var st = 0; st < 9; st++) {   // darker sheath streaks along the trunk
+        var sa = st / 9 * Math.PI * 2;
+        var streak = new THREE.Mesh(new THREE.BoxGeometry(4.1, 0.05, 0.12), toon(0x7f9a4a));
+        streak.position.set(0, Math.cos(sa) * 1.02, Math.sin(sa) * 1.02); streak.rotation.x = sa; trunk.add(streak);
+      }
+      trunk.position.set(0.6, 0.8, -6.5); ts.add(trunk);
+      // knife: blade + handle, shown while cutting
+      var knife = new THREE.Group();
+      var blade = withOutline(new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.9, 1.9), toon(0xdfe6ee)));
+      blade.position.y = 0.45; knife.add(blade);
+      var handle = withOutline(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.32, 0.9), toon(0x5a3416)));
+      handle.position.set(0, 0.75, 1.35); knife.add(handle);
+      // where the knife will cut: a glowing ring around the trunk
+      var cutRing = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.035, 6, 40), new THREE.MeshBasicMaterial({ color: 0xffe07a, depthTest: false, transparent: true }));
+      cutRing.rotation.y = Math.PI / 2; cutRing.renderOrder = 11; cutRing.visible = false; ts.add(cutRing);
+      knife.visible = false; ts.add(knife);
+      // a slice that just got cut (animates from the trunk onto the board)
+      var slice = null;
+      // a few bowls of flowers and leaves around the board, just for the mood
+      [[-3.4, 1.2, 0xffa31a], [3.5, 1.4, 0xff6f9e], [-3.2, -1.6, 0xffffff]].forEach(function (b) {
+        var bowl = withOutline(new THREE.Mesh(geoCache.shell, toon(0x7a4a2a, { side: THREE.DoubleSide })));
+        bowl.position.set(b[0], 0.35, b[1]); bowl.scale.set(0.8, 0.45, 0.8); ts.add(bowl);
+        var fp = [];
+        for (var f = 0; f < 9; f++) { var fa = f * 2.4, fr = (f % 3) * 0.2; fp.push({ geo: new THREE.IcosahedronGeometry(1, 1), color: f % 2 ? b[2] : 0xffe38a, m: M(b[0] + Math.cos(fa) * fr, 0.42, b[1] + Math.sin(fa) * fr, null, 0.16, 0.12, 0.16) }); }
+        addMerged(ts, fp, false);
+      });
+      var lampGlow = sprite(softTex, 0xffc070, 9, 0.18); lampGlow.position.set(0, 6, -6); ts.add(lampGlow);
+      var stage = new THREE.Group(); stage.position.y = -0.0; ts.add(stage);
+      var ring = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.025, 6, 32), new THREE.MeshBasicMaterial({ color: 0xffe07a, transparent: true, opacity: 0.9, depthTest: false }));
+      ring.rotation.x = Math.PI / 2; ring.renderOrder = 10; ring.visible = false; ts.add(ring);
+
+      var st8 = { active: false, look: null, k: null, mode: 'build', tool: null, sel: -1, hooks: {}, spin: 0.35, yaw: -0.5, knifeX: 0.9, drag: null, t: 0 };
+      var ray = new THREE.Raycaster(), ndc2 = new THREE.Vector2(), tmpV = new THREE.Vector3();
+
+      function rebuild() {
+        if (st8.k) { stage.remove(st8.k); disposeKrathong(st8.k); st8.k = null; }
+        st8.k = makeKrathong(0, st8.look, { separateItems: true });
+        stage.add(st8.k);
+        updateRing();
+      }
+      function itemObj(i) {
+        if (!st8.k) return null;
+        for (var c = 0; c < st8.k.children.length; c++) if (st8.k.children[c].userData.itemIndex === i) return st8.k.children[c];
+        return null;
+      }
+      function updateRing() {
+        var o = st8.sel >= 0 ? itemObj(st8.sel) : null;
+        ring.visible = !!o && st8.mode === 'build';
+        if (o) { o.getWorldPosition(tmpV); ring.position.copy(tmpV); ring.position.y += 0.02; ring.scale.setScalar(Math.max(0.6, o.scale.x)); }
+      }
+      function setNdc(e) {
+        var r = canvas.getBoundingClientRect();
+        ndc2.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+        ray.setFromCamera(ndc2, cam);
+      }
+      function realMesh(o) { return o.material !== outlineMat && o.visible; }
+      // which item is under the pointer (its index), or -1
+      function pickItem() {
+        if (!st8.k) return -1;
+        var hits = ray.intersectObject(st8.k, true);
+        for (var i = 0; i < hits.length; i++) {
+          var o = hits[i].object;
+          if (!realMesh(o)) continue;
+          for (var p = o; p && p !== st8.k; p = p.parent) if (p.userData.itemIndex != null) return p.userData.itemIndex;
+          return -1;   // the krathong itself is in front
+        }
+        return -1;
+      }
+      // a point on the krathong body (not on items) in the krathong's own coordinates
+      function pickSurface() {
+        if (!st8.k) return null;
+        var hits = ray.intersectObject(st8.k, true);
+        for (var i = 0; i < hits.length; i++) {
+          var o = hits[i].object, onItem = false;
+          if (!realMesh(o) || o.isSprite) continue;
+          for (var p = o; p && p !== st8.k; p = p.parent) if (p.userData.itemIndex != null) onItem = true;
+          if (onItem) continue;
+          return st8.k.worldToLocal(hits[i].point.clone());
+        }
+        return null;
+      }
+      function within(p) { return [Math.max(-2.9, Math.min(2.9, p.x)), Math.max(-0.9, Math.min(3.9, p.y)), Math.max(-2.9, Math.min(2.9, p.z))]; }
+
+      function down(e) {
+        if (!st8.active || slice) return;
+        setNdc(e);
+        if (st8.mode === 'cut') { st8.drag = { cut: true }; moveKnife(e); return; }
+        var idx = st8.tool ? -1 : pickItem();
+        st8.drag = { x: e.clientX, y: e.clientY, idx: idx, moved: false, yaw: st8.yaw };
+        if (idx >= 0) { st8.sel = idx; updateRing(); if (st8.hooks.select) st8.hooks.select(idx); }
+        try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* old browser */ }
+      }
+      function move(e) {
+        if (!st8.active) return;
+        if (st8.mode === 'cut') { moveKnife(e); return; }
+        var dr = st8.drag;
+        if (!dr) return;
+        if (Math.abs(e.clientX - dr.x) + Math.abs(e.clientY - dr.y) > 6) dr.moved = true;
+        if (!dr.moved) return;
+        if (dr.idx >= 0) {   // drag an item over the krathong
+          setNdc(e);
+          var p = pickSurface(), it = st8.look.design.items[dr.idx], o = itemObj(dr.idx);
+          if (p && it && o) { it.p = within(p).map(function (v) { return Math.round(v * 100) / 100; }); o.position.set(it.p[0], it.p[1], it.p[2]); updateRing(); }
+        } else {             // spin the krathong on the board
+          st8.yaw = dr.yaw + (e.clientX - dr.x) * 0.012;
+        }
+      }
+      function up(e) {
+        if (!st8.active) return;
+        var dr = st8.drag; st8.drag = null;
+        if (!dr) return;
+        if (dr.cut) { doCut(); return; }
+        if (dr.idx >= 0) { if (dr.moved && st8.hooks.change) st8.hooks.change(); return; }
+        if (dr.moved) return;
+        // a tap: place the chosen thing here, or deselect
+        setNdc(e);
+        if (st8.tool) {
+          var p = pickSurface();
+          if (!p) { if (st8.hooks.miss) st8.hooks.miss(); return; }
+          var items = st8.look.design.items;
+          if (items.length >= DZ.MAX_ITEMS) { if (st8.hooks.full) st8.hooks.full(); return; }
+          var it = { k: st8.tool.k, p: within(p).map(function (v) { return Math.round(v * 100) / 100; }), r: Math.round(st8.yaw * -100) / 100, s: 1 };
+          if (st8.tool.d != null) it.d = st8.tool.d;
+          items.push(it);
+          st8.sel = items.length - 1;
+          rebuild();
+          if (sfx) sfx.launch(false);
+          if (st8.hooks.change) st8.hooks.change();
+          if (st8.hooks.select) st8.hooks.select(st8.sel);
+        } else if (st8.sel >= 0) {
+          st8.sel = -1; updateRing(); if (st8.hooks.select) st8.hooks.select(-1);
+        }
+      }
+      canvas.addEventListener('pointerdown', down);
+      canvas.addEventListener('pointermove', move);
+      canvas.addEventListener('pointerup', up);
+      canvas.addEventListener('pointercancel', function () { st8.drag = null; });
+
+      // ---- cutting the trunk: the knife follows the pointer along the trunk; release = cut
+      var TRUNK_END = trunk.position.x + 2.1;   // world x of the trunk's cut end
+      function moveKnife(e) {
+        setNdc(e);
+        var hitP = new THREE.Vector3();
+        if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 0, 1), -trunk.position.z - 1.1), hitP)) return;
+        st8.knifeX = Math.max(TRUNK_END - DZ.TRUNK_MAX, Math.min(TRUNK_END - DZ.TRUNK_MIN, hitP.x));
+      }
+      function doCut() {
+        var h = Math.round((TRUNK_END - st8.knifeX) * 100) / 100;
+        slice = withOutline(new THREE.Mesh(trunkGeo(h), [trunkSideMat, trunkTop(), trunkTop()]));
+        slice.userData = { t: 0, h: h, from: new THREE.Vector3(TRUNK_END - h / 2, trunk.position.y, trunk.position.z) };
+        slice.position.copy(slice.userData.from); slice.rotation.z = Math.PI / 2;
+        ts.add(slice);
+        if (sfx) sfx.launch(true);
+      }
+
+      function frame(dt) {
+        st8.t += dt;
+        var portrait = cam.aspect < 0.8;
+        var cutting = st8.mode === 'cut';
+        var dist = portrait ? 8.6 : 7.6, el = cutting ? 0.62 : 0.5;
+        var tx = 0, ty = portrait ? -0.2 : 0.35, tz = 0;
+        var want = new THREE.Vector3(tx + Math.sin(-0.08) * dist * Math.cos(el), ty + Math.sin(el) * dist, tz + Math.cos(-0.08) * dist * Math.cos(el));
+        if (cutting) { want.set(TRUNK_END + 1.6, 3.2, trunk.position.z + (portrait ? 6.2 : 4.6)); tx = TRUNK_END - (portrait ? 0.5 : 0.9); ty = 0.7; tz = trunk.position.z; }
+        cam.position.lerp(want, Math.min(1, dt * 4));
+        tmpV.set(tx, ty, tz);
+        cam.lookAt(tmpV);
+        stage.rotation.y += ((st8.drag && st8.drag.idx < 0 ? st8.yaw : st8.yaw) - stage.rotation.y) * Math.min(1, dt * 8);
+        if (!st8.drag && !cutting) st8.yaw += dt * 0.05;   // a gentle turntable
+        knife.visible = cutting && !slice;
+        knife.position.set(st8.knifeX, trunk.position.y + 1.05 + Math.abs(Math.sin(st8.t * 3)) * 0.08, trunk.position.z);
+        cutRing.visible = knife.visible; cutRing.position.set(st8.knifeX, trunk.position.y, trunk.position.z);
+        stage.visible = !cutting;
+        if (st8.k) {
+          var fl = st8.k.userData.flame;
+          if (fl) fl.scale.setScalar(1.0 + Math.sin(st8.t * 14) * 0.06);
+        }
+        if (slice) {   // fly the slice from the trunk, stand it up and set it on the board
+          var u = slice.userData; u.t += dt / 0.9;
+          var e = Math.min(1, u.t), k = e * e * (3 - 2 * e);
+          slice.position.set(u.from.x * (1 - k), u.from.y * (1 - k) + (-0.19 + u.h / 2) * k + Math.sin(k * Math.PI) * 1.4, u.from.z * (1 - k));
+          slice.rotation.z = Math.PI / 2 * (1 - k);
+          if (e >= 1) {
+            ts.remove(slice); slice.geometry.dispose(); slice = null;
+            st8.mode = 'build';
+            if (st8.hooks.cut) st8.hooks.cut(u.h);
+          }
+        }
+        updateRing();
+      }
+
+      return {
+        scene: ts, camera: cam, frame: frame,
+        get active() { return st8.active; },
+        resize: function (w, h) {
+          cam.aspect = w / h; cam.fov = cam.aspect < 0.8 ? 55 : 42;
+          // wide screens: the tool panel sits on the right (workshop.js), so centre the table in the space left of it
+          if (w >= 900) cam.setViewOffset(w, h, 210, 0, w, h); else cam.clearViewOffset();
+          cam.updateProjectionMatrix();
+        },
+        // look is shared with the workshop UI: the table edits look.design.items in place and calls hooks.change()
+        open: function (look, hooks) {
+          st8.active = true; st8.look = look; st8.hooks = hooks || {}; st8.mode = 'build'; st8.tool = null; st8.sel = -1; st8.yaw = -0.5;
+          cam.position.set(0, 6, 10);
+          rebuild();
+        },
+        close: function () {
+          st8.active = false; st8.drag = null;
+          if (st8.k) { stage.remove(st8.k); disposeKrathong(st8.k); st8.k = null; }
+          if (slice) { ts.remove(slice); slice.geometry.dispose(); slice = null; }
+        },
+        refresh: function () { if (st8.active) rebuild(); },
+        mode: function (m) { st8.mode = m; st8.sel = -1; st8.drag = null; },
+        tool: function (t) { st8.tool = t; if (t) { st8.sel = -1; } },
+        selected: function () { return st8.sel; },
+        select: function (i) { st8.sel = i; updateRing(); },
+        // change the selected item: { rotate: radians, scale: factor, remove: true }
+        edit: function (op) {
+          var items = st8.look.design.items, it = items[st8.sel];
+          if (!it) return;
+          if (op.remove) { items.splice(st8.sel, 1); st8.sel = -1; rebuild(); }
+          else {
+            if (op.rotate) it.r = Math.round((((it.r + op.rotate) % 6.28) + 6.28) % 6.28 * 100) / 100;
+            if (op.scale) it.s = Math.round(Math.max(DZ.SCALE_MIN, Math.min(DZ.SCALE_MAX, it.s * op.scale)) * 100) / 100;
+            if (op.lift) it.p[1] = Math.round(Math.max(-0.9, Math.min(3.9, it.p[1] + op.lift)) * 100) / 100;
+            var o = itemObj(st8.sel);
+            if (o) { o.rotation.y = it.r; o.scale.setScalar(it.s); o.position.y = it.p[1]; }
+          }
+          if (st8.hooks.change) st8.hooks.change();
+        }
+      };
+    })();
 
     var hero = addKrathong(0.6, 6.2, 1.15, 0, false);
     hero.userData.hero = true;
@@ -1873,6 +2249,7 @@
       renderer.setSize(w, h, false);
       viewW = w; viewH = h;
       camera.aspect = w / h;
+      table.resize(w, h);
       var portrait = camera.aspect < 0.8;
       camera.fov = portrait ? 66 : 50;
       camFinal.set(0, portrait ? 4.6 : 3.4, portrait ? 15.5 : 12);
@@ -1927,6 +2304,8 @@
         }
       }
 
+      if (table.active) { table.frame(dt); renderer.render(table.scene, table.camera); return; }
+
       // camera intro + gentle drift
       var p = reduced ? 1 : ease(t / 4.2);
       camera.position.lerpVectors(camStart, camFinal, p);
@@ -1937,15 +2316,6 @@
         camera.position.x += Math.sin(t * 0.07) * 3.5 * p;
         camera.position.y += Math.sin(t * 0.05) * 0.7 * p;
         tmpLook.x += Math.sin(t * 0.07) * 1.5 * p;
-      }
-      // workshop open: glide in close to the hero krathong, keeping it in the upper half of the screen
-      focus += (focusTarget - focus) * Math.min(1, dt * 2.5);
-      if (focus > 0.001) {
-        focusPos.set(hero.position.x, 2.4, hero.position.z + 4.4);
-        focusLook.set(hero.position.x, -1.1, hero.position.z - 1);
-        camera.position.lerp(focusPos, focus);
-        tmpLook.lerp(focusLook, focus);
-        hero.rotation.y += dt * 0.5 * focus;
       }
       camera.lookAt(tmpLook);
 
@@ -2146,6 +2516,7 @@
     // click on water → launch krathong there
     var raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
     function launchAt(clientX, clientY) {
+      if (table.active) return false;
       var rect = canvas.getBoundingClientRect();
       ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(ndc, camera);
@@ -2208,7 +2579,7 @@
       launchFront: launchFront,
       launchRandom: launchRandom,
       setHeroLook: setHeroLook,
-      focusHero: function (on) { focusTarget = on ? 1 : 0; },
+      table: table,
       dispose: function () {
         running = false; cancelAnimationFrame(raf);
         scene.traverse(function (o) {
@@ -2600,10 +2971,26 @@
         if (!closed) pollTimer = setTimeout(feedFetch, opts.wishPollMs || pollDelay({ screen: !!opts.screen, idleMs: Date.now() - lastInput, hidden: document.hidden }));
       });
     }
-    var photoBase = typeof opts.wishFeed === 'string' ? opts.wishFeed.replace(/\/wishes\/?(\?.*)?$/, '/photo') : null;
+    // a friend's krathong look (design + photo) is fetched once per wish and kept for this visit
+    var lookBase = typeof opts.wishFeed === 'string' ? opts.wishFeed.replace(/\/wishes\/?(\?.*)?$/, '/look') : null;
+    var lookCache = {};
+    function fetchLook(id) {
+      if (!lookBase || !/^[a-z0-9]{4,32}$/.test(id)) return Promise.resolve(null);
+      if (!lookCache[id]) {
+        lookCache[id] = fetch(lookBase + '?id=' + id, { credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .catch(function () { delete lookCache[id]; return null; });
+      }
+      return lookCache[id];
+    }
     function floatWish(e) {
-      scene.launchFront({ name: e.name || 'เพื่อนในระบบ', wish: e.wish, other: true, design: e.design || null,
-        photo: e.photo && photoBase && opts.photos && /^[a-z0-9]+$/.test(String(e.id)) ? photoBase + '?id=' + e.id : null });
+      var info = { name: e.name || 'เพื่อนในระบบ', wish: e.wish, other: true };
+      if (!e.look) { scene.launchFront(info); return; }
+      fetchLook(e.id).then(function (l) {
+        if (closed || !scene) return;
+        if (l) { info.design = l.design || null; info.photo = opts.photos && DZ && DZ.photoOk(l.photo) ? l.photo : null; }
+        scene.launchFront(info);
+      });
     }
 
     // the person's own krathong from the workshop: { design, photo (JPEG data URL) }, kept on this device
@@ -2625,13 +3012,10 @@
       makeBtn.addEventListener('click', function () {
         if (!scene) return;
         root.classList.add('lk-making');
-        scene.focusHero(true);
         WS.open({
-          container: root, look: myLook, toast: toast,
-          onChange: function (look) { if (scene) scene.setHeroLook(look); },
+          container: root, look: myLook, toast: toast, table: scene.table,
           onDone: function (look) {
             root.classList.remove('lk-making');
-            if (scene) scene.focusHero(false);
             if (look !== undefined) {   // undefined = cancelled
               myLook = look;
               try { if (look) safeSet(LOOK_KEY, JSON.stringify(look)); else global.localStorage.removeItem(LOOK_KEY); } catch (e) { /* storage full: keep it for this visit */ }
@@ -2725,7 +3109,7 @@
       }
       var look = myLook || {};
       if (feed && wish) {   // share it so other users may see it
-        Promise.resolve(feed.save({ name: shownName, wish: wish, design: look.design || null, photo: look.photo || null })).then(function (r) {
+        Promise.resolve(feed.save({ name: shownName, wish: wish, design: look.design && DZ ? DZ.sanitize(look.design) : null, photo: look.photo || null })).then(function (r) {
           if (closed || !r) return;
           if (r.ok) { if (r.id) feedState.mine[r.id] = 1; setTimeout(function () { if (!closed) toast(MSG_SHARED); }, 1800); }
           else if (r.status === 422) toast(MSG_BLOCKED);

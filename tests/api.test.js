@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHandler } = require('../api/wishes.js');
-const { createPhotoHandler } = require('../api/photo.js');
+const { createLookHandler } = require('../api/look.js');
 const { call } = require('./helpers.js');
 const { createMemoryStore } = require('../lib/memory-store.js');
 const memoryStore = () => createMemoryStore();
@@ -62,7 +62,7 @@ test('POST rejects non-JSON (415), other origins (403), bad JSON (400), empty wi
   assert.equal((await call(h, post({ wish: 'x' }, { origin: 'https://evil.example' }))).statusCode, 403);
   assert.equal((await call(h, { method: 'POST', headers: JSON_H, body: '{nope' })).json.error, 'bad_json');
   assert.equal((await call(h, post({ wish: '   ' }))).json.error, 'empty');
-  assert.equal((await call(h, post({ wish: 'x'.repeat(60000) }))).statusCode, 413);
+  assert.equal((await call(h, post({ wish: 'x'.repeat(100000) }))).statusCode, 413);
 });
 
 test('POST strips tags/control chars and truncates name to 40 and wish to 80', async () => {
@@ -115,21 +115,22 @@ test('review fix: a storage error on GET is a 503, so the big-screen counter kee
   assert.equal((await call(h)).statusCode, 503);
 });
 
+const D = require('../public/design.js');
 const JPEG = 'data:image/jpeg;base64,' + Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9, 9]).toString('base64');
-const DESIGN = { base: 6, flowers: 3, topper: 4, leafColor: 2, leaf: [[0.5, 0], [1, 1], [0, 1]] };
+const DESIGN = { base: 6, trunk: 0.7, items: [{ k: D.ITEM.duck, p: [0.2, 0.5, 0.1], r: 1, s: 1.2 }], doodles: [{ s: [{ c: 2, w: 2, p: [[0, 0], [1, 1]] }] }] };
 
-test('POST keeps a sanitized design and a photo; GET lists them and /api/photo serves the image', async () => {
+test('POST keeps a sanitized design and photo as the look; /api/look serves it', async () => {
   const store = memoryStore(), h = createHandler({ store });
-  const r = await call(h, post({ name: 'ต้น', wish: 'ขอให้รวย', design: Object.assign({ evil: '<x>' }, DESIGN, { base: 42 }), photo: JPEG }));
+  const r = await call(h, post({ name: 'ต้น', wish: 'ขอให้รวย', design: Object.assign({ evil: '<x>' }, DESIGN), photo: JPEG }));
   assert.equal(r.statusCode, 201);
   const w = (await call(h)).json.wishes[0];
-  assert.deepEqual(w.design, Object.assign({}, DESIGN, { base: 0 }));
-  assert.equal(w.photo, true);
-  const p = await call(createPhotoHandler({ store }), { url: '/api/photo?id=' + r.json.id });
-  assert.equal(p.statusCode, 200);
-  assert.equal(p.headers['content-type'], 'image/jpeg');
-  assert.match(p.headers['cache-control'], /max-age=86400/);
-  assert.deepEqual(Buffer.from(p.raw), Buffer.from(JPEG.split(',')[1], 'base64'));
+  assert.equal(w.look, true);
+  assert.equal(w.design, undefined);   // the list stays small: looks are fetched one by one
+  const l = await call(createLookHandler({ store }), { url: '/api/look?id=' + r.json.id });
+  assert.equal(l.statusCode, 200);
+  assert.match(l.headers['cache-control'], /max-age=86400/);
+  assert.deepEqual(l.json.design, D.sanitize(DESIGN));
+  assert.equal(l.json.photo, JPEG);
 });
 
 test('POST rejects a photo that is not a small JPEG (422 bad_photo) and a photo without a name (400 photo_needs_name)', async () => {
@@ -140,15 +141,23 @@ test('POST rejects a photo that is not a small JPEG (422 bad_photo) and a photo 
   assert.equal(anon.statusCode, 400); assert.equal(anon.json.error, 'photo_needs_name');
 });
 
-test('a design that is not an object is dropped, the wish still posts', async () => {
+test('a design that is not an object is dropped, the wish still posts without a look', async () => {
   const store = memoryStore(), h = createHandler({ store });
   assert.equal((await call(h, post({ wish: 'x', design: 'boom' }))).statusCode, 201);
-  assert.equal((await call(h)).json.wishes[0].design, undefined);
+  assert.equal((await call(h)).json.wishes[0].look, undefined);
 });
 
-test('/api/photo: bad id 400, unknown id 404, no store 404', async () => {
-  const ph = createPhotoHandler({ store: memoryStore() });
-  assert.equal((await call(ph, { url: '/api/photo?id=../../x' })).statusCode, 400);
-  assert.equal((await call(ph, { url: '/api/photo?id=abc123' })).statusCode, 404);
-  assert.equal((await call(createPhotoHandler({ store: null }), { url: '/api/photo?id=abc123' })).statusCode, 404);
+test('a post with a big design and photo fits under the body limit', async () => {
+  const stroke = { c: 1, w: 2, p: Array.from({ length: 130 }, (_, i) => [i / 130, (i % 7) / 7]) };
+  const big = { doodles: [{ s: [stroke, stroke, stroke] }, { s: [stroke, stroke, stroke] }, { s: [stroke, stroke, stroke] }], items: Array.from({ length: 40 }, () => ({ k: 2, p: [1.11, 2.22, -1.33], r: 3.33, s: 1.11 })) };
+  const photo = 'data:image/jpeg;base64,/9j/' + 'A'.repeat(D.MAX_PHOTO_CHARS - 40);
+  const r = await call(createHandler({ store: memoryStore() }), post({ name: 'ต้น', wish: 'x', design: D.sanitize(big), photo }))   // the browser sends sanitized designs;
+  assert.equal(r.statusCode, 201);
+});
+
+test('/api/look: bad id 400, unknown id 404, no store 404', async () => {
+  const lh = createLookHandler({ store: memoryStore() });
+  assert.equal((await call(lh, { url: '/api/look?id=../../x' })).statusCode, 400);
+  assert.equal((await call(lh, { url: '/api/look?id=abc123' })).statusCode, 404);
+  assert.equal((await call(createLookHandler({ store: null }), { url: '/api/look?id=abc123' })).statusCode, 404);
 });
