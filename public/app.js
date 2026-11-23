@@ -25,9 +25,64 @@
       }
       note.textContent = defaultNote;
       store(NAME_KEY, name);
+      var from = liftMoon();
+      document.body.classList.add('leaving');
+      var handed = false;
+      // no 3D (no WebGL): just let the moon fade away
+      var safety = setTimeout(function () { if (!handed) { handed = true; flyTo(null, from); } }, 8000);
       // called inside the click so the music may start (browser autoplay rules)
-      egg.show({ userName: name, wishFeed: FEED, enterLabel: 'กลับหน้าแรก', onClose: function () { input.focus(); } });
+      egg.show({
+        userName: name, wishFeed: FEED, enterLabel: 'กลับหน้าแรก',
+        onReady: function (api) { if (handed) return; handed = true; clearTimeout(safety); flyTo(api, from); },
+        onClose: function () { resetMoon(); document.body.classList.remove('leaving'); input.focus(); }
+      });
     });
+  }
+
+  // ---- the landing moon is the scene's moon: on "go" a copy lifts above the scene as it fades in,
+  // glides and shrinks onto the 3D moon (following it while the camera tilts down) and dissolves into it
+  var moonEl = document.getElementById('moon'), flyer = null, flyRaf = 0;
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (moonEl && egg.drawMoon) egg.drawMoon(moonEl.querySelector('canvas'));
+  function resetMoon() {
+    cancelAnimationFrame(flyRaf);
+    if (flyer && flyer.parentNode) flyer.parentNode.removeChild(flyer);
+    flyer = null;
+    if (moonEl) moonEl.style.visibility = '';
+  }
+  function place(c, d0, op) {
+    flyer.style.transform = 'translate(' + (c.x - d0 / 2).toFixed(1) + 'px,' + (c.y - d0 / 2).toFixed(1) + 'px) scale(' + (c.d / d0).toFixed(4) + ')';
+    flyer.style.opacity = op;
+  }
+  function liftMoon() {
+    if (!moonEl) return null;
+    resetMoon();
+    var r = moonEl.getBoundingClientRect(), from = { x: r.left + r.width / 2, y: r.top + r.height / 2, d: r.width };
+    flyer = document.createElement('div');
+    flyer.className = 'moon flying'; flyer.setAttribute('aria-hidden', 'true');
+    var src = moonEl.querySelector('canvas'), cv = document.createElement('canvas');
+    cv.width = src.width; cv.height = src.height; cv.getContext('2d').drawImage(src, 0, 0);
+    flyer.appendChild(cv);
+    flyer.style.width = from.d + 'px';
+    document.body.appendChild(flyer);
+    place(from, from.d, 1);
+    moonEl.style.visibility = 'hidden';
+    return from;
+  }
+  function easeInOut(x) { return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; }
+  function flyTo(api, from) {
+    if (!flyer || !from) return;
+    var d0 = from.d, t0 = performance.now(), FLY = reduceMotion ? 1 : 1700, FADE = reduceMotion ? 400 : 700;
+    (function step(now) {
+      if (!flyer) return;
+      var to = (api && api.moonScreen()) || from;
+      var e = now - t0, k = easeInOut(Math.min(1, e / FLY));
+      var cur = { x: from.x + (to.x - from.x) * k, y: from.y + (to.y - from.y) * k, d: from.d + (to.d - from.d) * k };
+      // dissolve into the scene's moon at the end, so the two never show as separate discs
+      var op = e < FLY * 0.8 ? 1 : Math.max(0, 1 - (e - FLY * 0.8) / (FLY * 0.2 + FADE));
+      place(cur, d0, op);
+      if (op > 0) flyRaf = requestAnimationFrame(step); else flyer.style.visibility = 'hidden';
+    })(t0);
   }
 
   function loadQrLib() {
