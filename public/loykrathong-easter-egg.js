@@ -2437,6 +2437,102 @@
         }
       };
     })();
+    // เรือแห่: a party barge in the style of a Thai "rot hae" - speaker stacks, chasing lights, three dancers -
+    // that comes by every minute or so, closer and faster than the rowing boat
+    var partyInfo = { passes: 0, state: 'away' };
+    var updateParty = (function makeParty() {
+      var g = new THREE.Group(), p = [];
+      // hull: a flat barge, pink-purple with a gold trim and a raised bow
+      p.push({ geo: new THREE.BoxGeometry(6, 0.55, 2), color: 0xb03a8a, m: M(0, 0.2, 0) });
+      p.push({ geo: new THREE.BoxGeometry(6.1, 0.08, 2.1), color: 0xf6c344, m: M(0, 0.5, 0) });
+      p.push({ geo: new THREE.CylinderGeometry(1, 1, 2, 3, 1), color: 0xb03a8a, m: M(-3.2, 0.22, 0, E(Math.PI / 2, 0, -Math.PI / 2), 0.55, 1, 0.32) });
+      p.push({ geo: new THREE.BoxGeometry(6, 0.06, 1.9), color: 0x6b2a6a, m: M(0, 0.5, 0) });   // deck
+      // canopy on four poles
+      [[-2.2, -0.8], [-2.2, 0.8], [1.2, -0.8], [1.2, 0.8]].forEach(function (c) { p.push({ geo: new THREE.CylinderGeometry(0.04, 0.04, 1.9, 6), color: 0xf6c344, m: M(c[0], 1.45, c[1]) }); });
+      p.push({ geo: new THREE.BoxGeometry(3.8, 0.08, 2), color: 0x3fbf9f, m: M(-0.5, 2.42, 0) });
+      // bunting: little triangle flags along both long edges of the canopy
+      var FLAG = [0xff3b6b, 0xffc93c, 0x3fa9f5, 0x7bdf5a, 0xb26bff];
+      for (var fl = 0; fl < 12; fl++) [-1, 1].forEach(function (sd) {
+        p.push({ geo: new THREE.ConeGeometry(0.12, 0.26, 3), color: FLAG[fl % FLAG.length], m: M(-2.3 + fl * 0.33, 2.25, sd * 1.0, E(Math.PI, 0, 0)) });
+      });
+      // speaker stacks at the stern
+      [-0.55, 0.55].forEach(function (z) {
+        p.push({ geo: new THREE.BoxGeometry(0.7, 1.3, 0.75), color: 0x1b1030, m: M(2.4, 1.15, z) });
+      });
+      g.add(withOutline(new THREE.Mesh(merge(p), mats.vc)));
+      // speaker cones that pump to the beat
+      var cones = [];
+      [-0.55, 0.55].forEach(function (z) { [0.85, 1.45].forEach(function (y) {
+        var c = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.06, 16), toon(0x6a6a7a));
+        c.rotation.z = Math.PI / 2; c.position.set(2.04, y, z); g.add(c); cones.push(c);
+      }); });
+      // a banner on both sides
+      var banner = canvasTex(512, 96, function (ctx, w, h) {
+        ctx.fillStyle = '#ffe27a'; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#c4302b'; ctx.font = 'bold 54px Mitr, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('🎉 ลอยกระทง ' + (new Date().getFullYear() + 543) + ' 🎉', w / 2, h / 2 + 4);
+      });
+      var bmat = new THREE.MeshBasicMaterial({ map: banner });   // front side only, so it never reads mirrored
+      [-1, 1].forEach(function (sd) { var b = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 0.5), bmat); b.position.set(-0.6, 0.22, sd * 1.02); b.rotation.y = sd < 0 ? Math.PI : 0; g.add(b); });
+      // chasing lights around the canopy
+      var lights = [], LC = ['#ff3b6b', '#ffc93c', '#3fa9f5', '#7bdf5a', '#ff7ae0'];
+      for (var li = 0; li < 16; li++) {
+        var a = li / 16, x, z;
+        if (a < 0.5) { x = -2.4 + a * 2 * 3.8; z = 1.02; } else { x = 1.4 - (a - 0.5) * 2 * 3.8; z = -1.02; }
+        var sp = sprite(softTex, 0xffffff, 0.55, 1); sp.position.set(x, 2.44, z); g.add(sp); lights.push(sp);
+      }
+      var wash = sprite(softTex, 0xff4fd8, 7, 0.0); wash.position.set(-0.5, 1.6, 0); g.add(wash);
+      // three dancers: bouncing, arms waving in turn
+      var dancers = [], SHIRT = [0xff3b6b, 0x3fa9f5, 0xffc93c];
+      [-1.7, -0.6, 0.5].forEach(function (x, i) {
+        var d = new THREE.Group(); d.position.set(x, 0.55, (i - 1) * 0.35);
+        var body = withOutline(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 0.6, 12), toon(SHIRT[i]))); body.position.y = 0.55; d.add(body);
+        var legs = withOutline(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.18, 0.3, 10), toon(0x2a2a4a))); legs.position.y = 0.12; d.add(legs);
+        var head = withOutline(new THREE.Mesh(S(0.2, 14, 12), mats.skin)); head.position.y = 1.02; d.add(head);
+        var hair = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), toon(i === 1 ? 0xf2c24a : 0x2b1a12)); hair.scale.setScalar(0.21); hair.position.y = 1.05; d.add(hair);
+        var arms = [-1, 1].map(function (sd) {
+          var pv = new THREE.Group(); pv.position.set(0.24 * sd, 0.78, 0); d.add(pv);
+          var arm = withOutline(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.46, 6), mats.skin)); arm.position.y = -0.22; pv.add(arm);
+          return pv;
+        });
+        g.add(d); dancers.push({ g: d, arms: arms, ph: i * 1.3 });
+      });
+      g.visible = false;
+      scene.add(g);
+      var u = { state: 'away', wait: 20, x: 34, z: -9.5, dir: -1, rip: 0 };
+      return function (dt, now) {
+        if (u.state === 'away') {
+          u.wait -= dt;
+          if (u.wait <= 0) { u.state = 'passing'; u.dir = R() < 0.5 ? -1 : 1; u.x = -u.dir * 34; g.visible = true; partyInfo.passes++; }
+          partyInfo.state = u.state;
+          return;
+        }
+        u.x += u.dir * 3 * dt;
+        if (Math.abs(u.x) > 34) { u.state = 'away'; u.wait = 45 + R() * 30; g.visible = false; partyInfo.state = u.state; return; }
+        partyInfo.state = u.state;
+        var wy = wave(u.x, u.z, now), beat = now * 4.2;   // ~126 bpm
+        g.position.set(u.x, wy - 0.12 + Math.abs(Math.sin(beat * Math.PI)) * 0.04, u.z);
+        g.rotation.set(Math.sin(now * 1.3) * 0.02, u.dir > 0 ? Math.PI : 0, Math.sin(now * 1.7) * 0.025);   // bow (−x) leads
+        dancers.forEach(function (dn, i) {
+          var b = Math.abs(Math.sin(beat * Math.PI + dn.ph));
+          dn.g.position.y = 0.55 + b * 0.18;
+          dn.g.rotation.y = Math.sin(beat * 0.5 + dn.ph) * 0.6;
+          dn.arms[0].rotation.z = 2.4 + Math.sin(beat * Math.PI + dn.ph) * 0.6;    // arms up, waving in turn
+          dn.arms[1].rotation.z = -2.4 + Math.sin(beat * Math.PI + dn.ph + Math.PI) * 0.6;
+        });
+        cones.forEach(function (c) { var k = 1 + Math.pow(Math.abs(Math.sin(beat * Math.PI)), 6) * 0.35; c.scale.set(k, 1, k); });
+        var step = Math.floor(beat * 2);
+        lights.forEach(function (sp, i) { sp.material.color.set(LC[(i + step) % LC.length]); sp.material.opacity = (i + step) % 3 ? 0.9 : 0.35; });
+        wash.material.color.set(LC[step % LC.length]); wash.material.opacity = 0.12 + 0.08 * Math.abs(Math.sin(beat * Math.PI));
+        u.rip -= dt;
+        if (u.rip <= 0) { ripple(u.x - u.dir * 3, u.z, 2.6); ripple(u.x - u.dir * 3, u.z + 1, 1.8); u.rip = 0.35; }
+        // its wake rocks krathongs nearby (they wobble, never capsize)
+        for (var bi = 0; bi < krathongs.length; bi++) {
+          var kk = krathongs[bi], kd = kk.userData, dx = kk.position.x - u.x, dz = kk.position.z - u.z;
+          if (Math.abs(dx) < 3.6 && Math.abs(dz) < 2.2 && now - (kd.bumpAt || -9) > 1.5) { kd.bumpAt = now; bumpKrathong(kk, u.x, u.z, 0.8); }
+        }
+      };
+    })();
     var dogInfo = { state: '', charges: 0, bumps: 0 };   // for stats() / ?lkdebug=1
     var updateDog = (function makeDog() {
       var V3 = THREE.Vector3;
@@ -3089,6 +3185,7 @@
       for (var kd = 0; kd < kids.length; kd++) updateKid(kids[kd], dt, t);
       updateDog(dt, t);
       updateBoat(dt, t);
+      updateParty(dt, t);
       for (var rq = 0; rq < ripples.length; rq++) {
         var rr = ripples[rq], rl = rr.userData.life;
         if (rl > 1.2) { rr.visible = false; continue; }
@@ -3289,7 +3386,7 @@
       stats: function () {
         return { tier: tier, gpu: env.gpu || '', pixelRatio: PR, bloom: !!composer, fpsCap: perf.cap || null, fps: Math.round(1000 / perf.ema),
           worstFrameMs: Math.round(perf.worst), hitches: +perf.spikes.toFixed(1), degradeSteps: perf.step, drawCalls: renderer.info.render.calls,
-          dog: { state: dogInfo.state, charges: dogInfo.charges, bumps: dogInfo.bumps } };
+          dog: { state: dogInfo.state, charges: dogInfo.charges, bumps: dogInfo.bumps }, party: { state: partyInfo.state, passes: partyInfo.passes } };
       },
       resize: resize,
       launchAt: launchAt,
