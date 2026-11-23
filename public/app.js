@@ -61,6 +61,7 @@
     var countEl = panel.querySelector('.count');
     egg.show({
       screen: true, wishFeed: FEED,
+      photos: !/[?&]photos=0\b/.test(location.search),   // ?screen=1&photos=0 hides everyone's photos
       onFeed: function (d) {
         countEl.hidden = false;
         countEl.innerHTML = 'ลอยไปแล้ว <b></b> กระทง';

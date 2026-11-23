@@ -1,10 +1,11 @@
 'use strict';
 // GET  /api/wishes            -> { count, wishes: [{ id, name, wish }] } newest first (edge-cached 3s)
-// POST /api/wishes {name,wish} -> 201 { ok, id } | 400 | 403 | 405 | 413 | 415 | 422 | 429 | 503
+// POST /api/wishes {name,wish,client?,design?,photo?} -> 201 { ok, id } | 400 | 403 | 405 | 413 | 415 | 422 | 429 | 503
 const { check, HIDDEN } = require('../public/filter.js');
 const { storeFromEnv } = require('../lib/store.js');
+const design = require('../public/design.js');
 
-const MAX_NAME = 40, MAX_WISH = 80, MAX_BODY = 4096, LIST_SIZE = 50;
+const MAX_NAME = 40, MAX_WISH = 80, MAX_BODY = 49152, LIST_SIZE = 50;
 
 function clean(s, n) {
   return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(HIDDEN, '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -65,10 +66,18 @@ function createHandler({ store }) {
     try { raw = await readBody(req); } catch (e) { return send(res, e.code === 413 ? 413 : 400, { error: e.code === 413 ? 'too_big' : 'bad_body' }); }
     let data;
     try { data = JSON.parse(raw); } catch (e) { return send(res, 400, { error: 'bad_json' }); }
+    if (!data || typeof data !== 'object') data = {};
 
     const name = clean(data && data.name, MAX_NAME), wish = clean(data && data.wish, MAX_WISH);
     if (!wish) return send(res, 400, { error: 'empty' });
     if (!check(wish).ok || (name && !check(name).ok)) return send(res, 422, { error: 'blocked' });
+    let photo = null;
+    if (data.photo != null && data.photo !== '') {
+      if (!design.photoOk(data.photo)) return send(res, 422, { error: 'bad_photo' });
+      if (!name) return send(res, 400, { error: 'photo_needs_name' });   // a face on the big screen should have a name on it
+      photo = data.photo;
+    }
+    const look = design.sanitize(data.design);
     if (!store) return send(res, 503, { error: 'storage' });
 
     try {
@@ -77,7 +86,7 @@ function createHandler({ store }) {
       const ip = clientIp(req);
       const client = /^[A-Za-z0-9-]{8,64}$/.test(String(data.client || '')) ? String(data.client) : 'ip-' + ip;
       if (!(await store.allow({ client, ip }))) return send(res, 429, { error: 'too_many' });
-      const id = await store.add({ name, wish });
+      const id = await store.add({ name, wish, design: look, photo });
       return send(res, 201, { ok: true, id });
     } catch (e) {
       console.error('add failed', e.message);

@@ -30,7 +30,7 @@
       ]
     },
     {
-      "source": "/(loykrathong-easter-egg.js|filter.js|app.js|semed-logo.png)",
+      "source": "/(loykrathong-easter-egg.js|filter.js|design.js|workshop.js|app.js|semed-logo.png)",
       "headers": [
         {
           "key": "Cache-Control",

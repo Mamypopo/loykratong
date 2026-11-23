@@ -4,7 +4,7 @@
  *   npm run dev            -> http://localhost:5173   (and /?screen=1 for the big screen)
  *
  * - Static files from public/ (only the files listed in PUBLIC)
- * - /api/wishes handled by the same code as on Vercel (api/wishes.js)
+ * - /api/wishes and /api/photo handled by the same code as on Vercel (api/wishes.js)
  * - Storage: Upstash Redis if KV_REST_API_URL/KV_REST_API_TOKEN are set, otherwise in memory
  * - Response headers taken from vercel.json, so CSP problems show up locally too
  *
@@ -16,13 +16,14 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { createHandler } = require('./api/wishes.js');
+const { createPhotoHandler } = require('./api/photo.js');
 const { storeFromEnv } = require('./lib/store.js');
 const { createMemoryStore } = require('./lib/memory-store.js');
 
 const PORT = Number(process.env.PORT) || 5173;
 const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = path.join(__dirname, 'public');
-const PUBLIC = new Set(['index.html', 'app.js', 'filter.js', 'loykrathong-easter-egg.js', 'semed-logo.png']);
+const PUBLIC = new Set(['index.html', 'app.js', 'filter.js', 'loykrathong-easter-egg.js', 'semed-logo.png', 'design.js', 'workshop.js']);
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.json': 'application/json'
 };
@@ -41,12 +42,14 @@ function vercelHeaders(urlPath) {
 
 const store = storeFromEnv() || createMemoryStore();
 const api = createHandler({ store });
+const photoApi = createPhotoHandler({ store });
 
 http.createServer((req, res) => {
   let url;
   try { url = new URL(req.url, 'http://localhost'); } catch (e) { res.statusCode = 400; return res.end(); }
   for (const [k, v] of Object.entries(vercelHeaders(url.pathname))) res.setHeader(k, v);
   if (url.pathname === '/api/wishes') return api(req, res);
+  if (url.pathname === '/api/photo') return photoApi(req, res);
 
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; return res.end(); }
   let name;

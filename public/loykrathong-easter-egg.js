@@ -43,6 +43,8 @@
     wishPollMs: null,       // ถาม API หากระทงใหม่ทุกกี่ ms (null = อัตโนมัติ: จอใหญ่ 3 วิ, ทั่วไป 12 วิ, ไม่มีคนแตะ 5 นาที 30 วิ)
     onFeed: null,           // function ({ count }) ทุกครั้งที่ดึง feed สำเร็จ (ใช้กับตัวนับบนจอใหญ่)
     screen: false,          // โหมดจอใหญ่: ไม่มีช่องพิมพ์/ปุ่มปิด, ลอยกระทงใหม่ของทุกคน
+    photos: true,           // แสดงรูปที่คนแนบมากับกระทง (false = ซ่อนรูปของทุกคนบนจอนี้)
+    workshop: true,         // ปุ่ม "ทำกระทงของฉัน" (ต้องโหลด design.js และ workshop.js ก่อนไฟล์นี้)
     wishReturnChance: 0.6,  // โอกาสที่กระทง+คำอธิษฐานที่ลอยหายไปแล้วจะสุ่มลอยกลับมาอีก (0–1, ลดลงทุกรอบ)
     demo: false,            // โหมดเดโม: เล่นอัตโนมัติ (ลอยกระทง+คำอธิษฐานตัวอย่าง) ไม่สนวันที่/ไม่บันทึกว่าเคยดู
     onClose: null,
@@ -156,6 +158,8 @@
         },
         save: function (entry) {
           var body = { name: entry.name, wish: entry.wish, client: clientId() };
+          if (entry.design) body.design = entry.design;
+          if (entry.photo) body.photo = entry.photo;
           return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
             .then(function (r) {
               return r.json().catch(function () { return {}; }).then(function (b) {
@@ -187,7 +191,8 @@
   function mergeFeed(state, list) {
     var fresh = [], pool = [];
     (list || []).forEach(function (e) {
-      var item = { id: e && e.id != null ? String(e.id) : '', name: clip(e && e.name, 40), wish: clip(e && e.wish, 80) };
+      var item = { id: e && e.id != null ? String(e.id) : '', name: clip(e && e.name, 40), wish: clip(e && e.wish, 80),
+        design: e && e.design && typeof e.design === 'object' ? e.design : null, photo: !!(e && e.photo) };
       if (!item.wish) return;
       var key = item.id || item.name + '|' + item.wish;
       if (state.mine[key]) return;
@@ -287,6 +292,10 @@
     '.lk-btn:active{transform:translateY(2px)}',
     '.lk-egg .lk-btn-float{background:linear-gradient(#fff0a0,#ffc94a 55%,#ff9f2e);color:#4a1f6b;box-shadow:0 4px 0 #b85c10,0 0 18px rgba(255,190,80,.55)}',
     '.lk-egg .lk-btn-enter{background:linear-gradient(#ffffff,#ece4ff);color:#3b1a6e;border-radius:999px;padding:12px 30px;font-size:16px;box-shadow:0 5px 0 #8a6bd1,0 12px 28px rgba(0,0,0,.4)}',
+    '.lk-egg .lk-btn-make{background:linear-gradient(#7fd88f,#3f8a5a);color:#fff;box-shadow:0 4px 0 #22573a,0 10px 24px rgba(0,0,0,.35);text-shadow:0 1px 2px rgba(0,0,0,.35)}',
+    '.lk-egg .lk-btn-make[hidden]{display:none}',
+    '.lk-making .lk-toast{top:14%}',
+    '.lk-making .lk-bottom,.lk-making .lk-bottom *,.lk-making .lk-title,.lk-making .lk-labels,.lk-making .lk-close{opacity:0;pointer-events:none!important;transition:opacity .3s}',
     '.lk-btn:focus-visible,.lk-close:focus-visible{outline:3px solid #7bdff2;outline-offset:3px}',
     '.lk-egg .lk-close{pointer-events:auto;position:absolute;top:max(14px,env(safe-area-inset-top));right:14px;width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(255,255,255,.4);background:rgba(20,8,60,.45);color:#fff;font-size:18px;line-height:1;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
     '.lk-toast{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);max-width:min(88vw,520px);text-align:center;font-size:clamp(16px,2.6vw,22px);padding:12px 24px;border-radius:22px;background:linear-gradient(135deg,rgba(255,235,180,.22),rgba(255,180,120,.1));border:1.5px solid rgba(255,226,122,.7);box-shadow:0 0 30px rgba(255,190,90,.35);color:#fff6d6;text-shadow:0 2px 6px rgba(0,0,0,.5);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);pointer-events:none;animation:lk-toast 3.6s ease forwards}',
@@ -392,6 +401,7 @@
     var camFinal = new THREE.Vector3(0, 3.4, 12);
     var lookFinal = new THREE.Vector3(0, 2.2, -12);
     var camStart = new THREE.Vector3(0, 16, 30);
+    var focus = 0, focusTarget = 0, focusPos = new THREE.Vector3(), focusLook = new THREE.Vector3();
     var lookStart = new THREE.Vector3(0, 22, -60);
     camera.position.copy(reduced ? camFinal : camStart);
 
@@ -1233,11 +1243,96 @@
     }
 
     var STYLES = [styleClassic, styleLotus, styleBread, styleCoconut, styleSwan, styleTurtle];
+    var DZ = global.LoyKrathongDesign || null;   // design.js: designs from the workshop and other people
 
-    function makeKrathong(variant) {
+    // a petal cut from the outline someone drew (points 0..1, y up), folded along its centre and curled out at the tip
+    function cutLeafGeo(points, tone, size) {
+      var W = 0.62 * size, H = 0.82 * size;
+      var shape = new THREE.Shape(points.map(function (p) { return new THREE.Vector2((p[0] - 0.5) * W, p[1] * H); }));
+      var geo = new THREE.ShapeGeometry(shape);
+      var pos = geo.attributes.position, col = [];
+      var ca = new THREE.Color(tone[0]), cb = new THREE.Color(tone[1]), ce = new THREE.Color(tone[2]), c = new THREE.Color();
+      for (var i = 0; i < pos.count; i++) {
+        var x = pos.getX(i), v = pos.getY(i) / H;
+        pos.setZ(i, -Math.abs(x) * 0.35 + 0.14 * v * v * H);
+        c.copy(ca).lerp(cb, Math.pow(Math.max(0, v), 0.8)).lerp(ce, Math.min(1, Math.abs(x) / (W / 2)) * 0.5);
+        col.push(c.r, c.g, c.b);
+      }
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      geo.computeVertexNormals();
+      return geo;
+    }
+
+    // 7) cut-your-own krathong: banana-trunk base, petals in the shape the person cut
+    function styleCustom(g, set, d) {
+      var tone = DZ.LEAF_TONES[d.leafColor] || DZ.LEAF_TONES[0];
+      var pts = d.leaf || DZ.PRESET_LEAVES[0].points;
+      g.add(withOutline(new THREE.Mesh(geoCache.base, mats.base)));
+      var band = withOutline(new THREE.Mesh(geoCache.band, mats.band)); band.position.y = 0.02; g.add(band);
+      var big = cutLeafGeo(pts, tone, 1), small = cutLeafGeo(pts, tone, 0.7), leaves = [];
+      petalRing(leaves, big, 11, 1.0, 0.17, 0.42, 0, false);
+      petalRing(leaves, small, 9, 0.78, 0.2, 0.22, Math.PI / 9, false);
+      g.add(new THREE.Mesh(merge(leaves), mats.leaf));
+      big.dispose(); small.dispose();
+      var dome = withOutline(new THREE.Mesh(geoCache.dome, mats.dome)); dome.position.y = 0.18; dome.scale.y = 0.75; g.add(dome);
+      var fl = [];
+      domeFlowers(fl, set, 0.62, 0.2, 14);
+      addMerged(g, fl, false);
+      return { top: 0.65, cx: -0.08, cz: 0.05, coins: [[0, 0.28, 1.22, 0], [0.27, 0.25, 1.19, 0.3]] };
+    }
+
+    // silly extras from the workshop, placed beside the candle
+    function addTopper(g, cfg, t) {
+      if (!t) return;
+      var p = [], x = cfg.cx, y = cfg.top, z = cfg.cz;
+      if (t === 1) {   // one more bunch of incense
+        incense(p, x + 0.3, y - 0.15, z + 0.2);
+      } else if (t === 2) {   // fried egg
+        p.push({ geo: S(1, 16, 8), color: 0xfffaf0, m: M(x + 0.38, y + 0.02, z + 0.18, null, 0.3, 0.035, 0.26) });
+        p.push({ geo: S(1, 12, 8), color: 0xffb300, m: M(x + 0.4, y + 0.07, z + 0.18, null, 0.1, 0.07, 0.1) });
+      } else if (t === 3) {   // rubber duck
+        var dx = x + 0.42, dy = y + 0.08, dz = z + 0.1;
+        p.push({ geo: S(1, 16, 12), color: 0xffd600, m: M(dx, dy, dz, null, 0.2, 0.15, 0.25) });
+        p.push({ geo: S(0.13, 14, 10), color: 0xffd600, m: M(dx, dy + 0.2, dz + 0.13) });
+        p.push({ geo: new THREE.ConeGeometry(0.05, 0.12, 8), color: 0xff7a00, m: M(dx, dy + 0.18, dz + 0.28, E(Math.PI / 2, 0, 0)) });
+        [-1, 1].forEach(function (s) { p.push({ geo: S(0.025, 6, 4), color: 0x1b1030, m: M(dx + 0.06 * s, dy + 0.25, dz + 0.23) }); });
+      } else if (t === 4) {   // party hat
+        var q = E(0, 0, 0.35);
+        p.push({ geo: new THREE.ConeGeometry(0.17, 0.45, 14), color: 0xff4f93, m: M(x - 0.38, y + 0.2, z, q) });
+        p.push({ geo: new THREE.TorusGeometry(0.15, 0.03, 6, 16), color: 0xffe14d, m: M(x - 0.36, y + 0.03, z, E(Math.PI / 2, 0, 0)) });
+        p.push({ geo: S(0.06, 8, 6), color: 0x7bdff2, m: M(x - 0.46, y + 0.43, z) });
+      } else if (t === 5) {   // heart
+        var hx = x + 0.42, hy = y + 0.35, hz = z;
+        p.push({ geo: S(0.12, 12, 10), color: 0xff3b6b, m: M(hx - 0.085, hy, hz) });
+        p.push({ geo: S(0.12, 12, 10), color: 0xff3b6b, m: M(hx + 0.085, hy, hz) });
+        p.push({ geo: new THREE.ConeGeometry(0.17, 0.26, 14), color: 0xff3b6b, m: M(hx, hy - 0.16, hz, E(Math.PI, 0, 0)) });
+      }
+      if (p.length) addMerged(g, p, true);
+    }
+
+    // the person's photo as a little polaroid above the krathong (always faces the camera)
+    function addPhoto(g, cfg, url) {
+      var mat = new THREE.SpriteMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
+      var s = new THREE.Sprite(mat);
+      s.scale.set(0.95, 0.95 * 190 / 160, 1);
+      s.position.set(cfg.cx + 0.75, cfg.top + 0.75, cfg.cz);
+      s.userData.ownMap = true;
+      g.add(s);
+      new THREE.TextureLoader().load(url, function (tex) {
+        if (!s.parent) { tex.dispose(); return; }
+        tex.encoding = THREE.sRGBEncoding;
+        mat.map = tex; mat.opacity = 1; mat.needsUpdate = true;
+      }, undefined, function () { /* photo gone or blocked: no polaroid */ });
+    }
+
+    // look = { design?, photo? (URL) } from the workshop or another person's wish
+    function makeKrathong(variant, look) {
       var g = new THREE.Group();
-      var set = variant === 0 ? FLOWER_SETS[0] : FLOWER_SETS[Math.floor(R() * FLOWER_SETS.length)];
-      var cfg = STYLES[variant % STYLES.length](g, set, variant);
+      var d = look && look.design && DZ ? DZ.sanitize(look.design) : null;
+      var set = d ? FLOWER_SETS[d.flowers] : variant === 0 ? FLOWER_SETS[0] : FLOWER_SETS[Math.floor(R() * FLOWER_SETS.length)];
+      var cfg = d ? (d.base === DZ.CUSTOM_BASE ? styleCustom(g, set, d) : STYLES[d.base](g, set, d.flowers)) : STYLES[variant % STYLES.length](g, set, variant);
+      if (d) addTopper(g, cfg, d.topper);
+      if (look && look.photo && env.photos !== false) addPhoto(g, cfg, look.photo);
       var cx = cfg.cx, cz = cfg.cz, top = cfg.top;
 
       var candle = withOutline(new THREE.Mesh(geoCache.candle, mats.candle)); candle.position.set(cx, top + 0.3, cz); g.add(candle);
@@ -1255,14 +1350,14 @@
       g.add(coins);
 
       g.userData = { flame: flame, core: flameCore, halo: halo, coin: coins, robbed: false, claimed: null, ph: R() * 10, spin: (R() - 0.5) * 0.25,
-        vx: (R() - 0.5) * 0.15, vz: -(0.35 + R() * 0.35), pop: 1, scale: 1, style: variant % STYLES.length };
+        vx: (R() - 0.5) * 0.15, vz: -(0.35 + R() * 0.35), pop: 1, scale: 1, style: d ? Math.min(d.base, STYLES.length - 1) : variant % STYLES.length };
       return g;
     }
 
     var krathongs = [];
-    function addKrathong(x, z, scale, variant, pop) {
+    function addKrathong(x, z, scale, variant, pop, look) {
       if (variant == null) variant = 1 + Math.floor(R() * 60);
-      var k = makeKrathong(variant);
+      var k = makeKrathong(variant, look);
       k.userData.variant = variant;
       k.position.set(x, 0, z);
       k.rotation.y = R() * 6.28;
@@ -1278,8 +1373,19 @@
       if (el && el.parentNode) el.parentNode.removeChild(el);
       k.traverse(function (o) {
         if (o.isMesh && o.material !== outlineMat && !isCached(o.geometry)) o.geometry.dispose();
-        if (o.isSprite) o.material.dispose();
+        if (o.isSprite) { if (o.userData.ownMap && o.material.map) o.material.map.dispose(); o.material.dispose(); }
       });
+    }
+    // the workshop restyles the big krathong at the front while you build
+    function setHeroLook(look) {
+      var old = hero, k = makeKrathong(0, look);
+      k.userData.variant = 0; k.userData.hero = true; k.userData.scale = old.userData.scale; k.userData.pop = 1;
+      k.position.copy(old.position); k.rotation.copy(old.rotation); k.scale.copy(old.scale);
+      if (heroLight) { old.remove(heroLight); k.add(heroLight); }
+      scene.add(k);
+      krathongs[krathongs.indexOf(old)] = k;
+      hero = k;
+      disposeKrathong(old);
     }
 
     var hero = addKrathong(0.6, 6.2, 1.15, 0, false);
@@ -1832,6 +1938,15 @@
         camera.position.y += Math.sin(t * 0.05) * 0.7 * p;
         tmpLook.x += Math.sin(t * 0.07) * 1.5 * p;
       }
+      // workshop open: glide in close to the hero krathong, keeping it in the upper half of the screen
+      focus += (focusTarget - focus) * Math.min(1, dt * 2.5);
+      if (focus > 0.001) {
+        focusPos.set(hero.position.x, 2.4, hero.position.z + 4.4);
+        focusLook.set(hero.position.x, -1.1, hero.position.z - 1);
+        camera.position.lerp(focusPos, focus);
+        tmpLook.lerp(focusLook, focus);
+        hero.rotation.y += dt * 0.5 * focus;
+      }
       camera.lookAt(tmpLook);
 
       starMat.uniforms.uTime.value = t;
@@ -1885,7 +2000,7 @@
           if (d.user) {
             var wi = d.wishInfo;
             if (wi && R() < wi.chance) {   // it may drift back into view later
-              returnQueue.push({ at: t + 6 + R() * 14, info: { name: wi.name, wish: wi.wish, other: wi.other, variant: d.variant, chance: wi.chance * 0.7, returning: true } });
+              returnQueue.push({ at: t + 6 + R() * 14, info: { name: wi.name, wish: wi.wish, other: wi.other, variant: d.variant, design: wi.design, photo: wi.photo, chance: wi.chance * 0.7, returning: true } });
             }
             disposeKrathong(k); krathongs.splice(i, 1); continue;
           }
@@ -2051,12 +2166,13 @@
       var variant = info && info.variant != null ? info.variant : null;
       var side = R() < 0.5 ? -1 : 1;
       var spread = camera.aspect < 0.8 ? 0.6 : 1;   // stay in frame on portrait phones
+      var look = info && (info.design || info.photo) ? { design: info.design, photo: info.photo } : null;
       var k = other || returning
-        ? addKrathong(0.6 + side * (3.5 + R() * 2.5) * spread, 2.5 + R() * 2.5, 0.9, variant, true)
-        : addKrathong(0.6 + side * (2.4 + R() * 0.8) * spread, 6.6, 0.95, variant, true);
+        ? addKrathong(0.6 + side * (3.5 + R() * 2.5) * spread, 2.5 + R() * 2.5, 0.9, variant, true, look)
+        : addKrathong(0.6 + side * (2.4 + R() * 0.8) * spread, 6.6, 0.95, variant, true, look);
       k.userData.user = true; k.userData.vz = -0.9; k.userData.vx = (R() - 0.5) * 0.3;
       if (info && info.wish) {
-        k.userData.wishInfo = { name: info.name, wish: info.wish, other: other, chance: info.chance == null ? RETURN_CHANCE : info.chance };
+        k.userData.wishInfo = { name: info.name, wish: info.wish, other: other, chance: info.chance == null ? RETURN_CHANCE : info.chance, design: info.design, photo: info.photo };
       }
       if (sfx) sfx.launch(!!(info && info.wish) && !other && !returning);
       if (info && info.wish && labelLayer) {
@@ -2091,6 +2207,8 @@
       launchAt: launchAt,
       launchFront: launchFront,
       launchRandom: launchRandom,
+      setHeroLook: setHeroLook,
+      focusHero: function (on) { focusTarget = on ? 1 : 0; },
       dispose: function () {
         running = false; cancelAnimationFrame(raf);
         scene.traverse(function (o) {
@@ -2385,6 +2503,7 @@
       '  </div>' +
       '  <div class="lk-bottom">' +
       '    <div class="lk-hint">แตะบนผิวน้ำเพื่อลอยกระทง หรือพิมพ์คำอธิษฐานด้านล่าง</div>' +
+      '    <button type="button" class="lk-btn lk-btn-make" hidden>✂️ ทำกระทงของฉัน</button>' +
       '    <label class="lk-name-row"><span>ลอยในนาม</span>' +
       '      <input class="lk-name-input" type="text" maxlength="40" placeholder="ไม่ระบุชื่อ" aria-label="ชื่อที่จะแสดงบนกระทง" autocomplete="nickname">' +
       '      <span class="lk-name-edit" aria-hidden="true">✎</span></label>' +
@@ -2481,7 +2600,50 @@
         if (!closed) pollTimer = setTimeout(feedFetch, opts.wishPollMs || pollDelay({ screen: !!opts.screen, idleMs: Date.now() - lastInput, hidden: document.hidden }));
       });
     }
-    function floatWish(e) { scene.launchFront({ name: e.name || 'เพื่อนในระบบ', wish: e.wish, other: true }); }
+    var photoBase = typeof opts.wishFeed === 'string' ? opts.wishFeed.replace(/\/wishes\/?(\?.*)?$/, '/photo') : null;
+    function floatWish(e) {
+      scene.launchFront({ name: e.name || 'เพื่อนในระบบ', wish: e.wish, other: true, design: e.design || null,
+        photo: e.photo && photoBase && opts.photos && /^[a-z0-9]+$/.test(String(e.id)) ? photoBase + '?id=' + e.id : null });
+    }
+
+    // the person's own krathong from the workshop: { design, photo (JPEG data URL) }, kept on this device
+    var DZ = global.LoyKrathongDesign, WS = global.LoyKrathongWorkshop, LOOK_KEY = 'lk-look';
+    function loadLook() {
+      if (!DZ) return null;
+      try {
+        var l = JSON.parse(safeGet(LOOK_KEY) || 'null');
+        if (!l || typeof l !== 'object') return null;
+        var d = DZ.sanitize(l.design), ph = DZ.photoOk(l.photo) ? l.photo : null;
+        return d || ph ? { design: d, photo: ph } : null;
+      } catch (e) { return null; }
+    }
+    var myLook = opts.screen || opts.demo ? null : loadLook();
+    var makeBtn = root.querySelector('.lk-btn-make');
+    if (WS && DZ && opts.workshop && !opts.screen && !opts.demo) {
+      makeBtn.hidden = false;
+      if (myLook) makeBtn.textContent = '✂️ แก้กระทงของฉัน';
+      makeBtn.addEventListener('click', function () {
+        if (!scene) return;
+        root.classList.add('lk-making');
+        scene.focusHero(true);
+        WS.open({
+          container: root, look: myLook, toast: toast,
+          onChange: function (look) { if (scene) scene.setHeroLook(look); },
+          onDone: function (look) {
+            root.classList.remove('lk-making');
+            if (scene) scene.focusHero(false);
+            if (look !== undefined) {   // undefined = cancelled
+              myLook = look;
+              try { if (look) safeSet(LOOK_KEY, JSON.stringify(look)); else global.localStorage.removeItem(LOOK_KEY); } catch (e) { /* storage full: keep it for this visit */ }
+              makeBtn.textContent = myLook ? '✂️ แก้กระทงของฉัน' : '✂️ ทำกระทงของฉัน';
+              if (myLook && myLook.photo && !clip(nameInput.value, 40)) toast('ใส่ชื่อด้วยนะ กระทงที่มีรูปต้องมีชื่อเจ้าของ');
+              else if (myLook) toast('✨ พร้อมลอยแล้ว พิมพ์คำอธิษฐานแล้วกด ลอยกระทง');
+            }
+            if (scene) scene.setHeroLook(myLook);
+          }
+        });
+      });
+    }
     function feedLoop() {
       if (closed) return;
       var now = Date.now();
@@ -2527,11 +2689,12 @@
     }
 
     function onResize() { if (scene) scene.resize(); }
-    function onKey(e) { if (e.key === 'Escape' && !opts.screen) close(); }
+    function onKey(e) { if (e.key === 'Escape' && !opts.screen && !root.classList.contains('lk-making')) close(); }
     function onCanvasClick(e) { if (scene && scene.launchAt(e.clientX, e.clientY)) toast('🪷 ลอยทุกข์ ลอยโศก ไปกับสายน้ำ'); }
 
     function close() {
       if (closed) return; closed = true;
+      if (WS && WS.close) WS.close();
       root.classList.remove('lk-in');
       if (audio) audio.stop();
       demoTimers.forEach(clearTimeout);
@@ -2557,15 +2720,20 @@
       if (filter && ((wish && !filter.check(wish).ok) || (shownName && !filter.check(shownName).ok))) {
         toast(MSG_BLOCKED); input.focus(); return;   // keep the text so it can be edited
       }
+      if (myLook && myLook.photo && !shownName && wish) {
+        toast('ใส่ชื่อก่อนนะ กระทงที่มีรูปต้องมีชื่อเจ้าของ'); nameInput.focus(); return;
+      }
+      var look = myLook || {};
       if (feed && wish) {   // share it so other users may see it
-        Promise.resolve(feed.save({ name: shownName, wish: wish })).then(function (r) {
+        Promise.resolve(feed.save({ name: shownName, wish: wish, design: look.design || null, photo: look.photo || null })).then(function (r) {
           if (closed || !r) return;
           if (r.ok) { if (r.id) feedState.mine[r.id] = 1; setTimeout(function () { if (!closed) toast(MSG_SHARED); }, 1800); }
           else if (r.status === 422) toast(MSG_BLOCKED);
           else if (r.status === 429) toast(MSG_TOO_FAST);
+          else if (r.status === 413 || r.error === 'bad_photo') toast('รูปนี้ส่งไม่ได้ ลองเลือกรูปใหม่ในโรงทำกระทงนะ');
         }).catch(function () { /* offline: it still floats on this screen */ });
       }
-      if (scene) scene.launchFront({ name: shownName || 'ไม่ระบุชื่อ', wish: wish });
+      if (scene) scene.launchFront({ name: shownName || 'ไม่ระบุชื่อ', wish: wish, design: look.design || null, photo: look.photo || null });
       if (!wish || !scene) toast(wish ? '✨ ' + wish : '🪷 ขอให้มีความสุขตลอดปี');
       input.value = '';
     });
@@ -2588,13 +2756,14 @@
           scene = buildScene(THREE, canvas, reduced, hasPost, {
             labelLayer: labelsLayer, sfx: audio ? audio.sfx : null, onCoin: onCoin, demo: opts.demo, tier: tier,
             logoUrl: opts.logoUrl === 'auto' ? SCRIPT_BASE + 'semed-logo.png' : opts.logoUrl,
-            returnChance: opts.wishReturnChance,
+            returnChance: opts.wishReturnChance, photos: opts.photos,
             onDegrade: function (step) {
               root.classList.add('lk-lowfx');
               root.setAttribute('data-degrade', String(step));
             }
           });
           if (opts.demo) startDemo();
+          if (myLook) scene.setHeroLook(myLook);
           startFeed();
         } catch (err) {
           fallback(); return;   // WebGL unavailable: keep the 2D greeting

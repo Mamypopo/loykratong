@@ -17,7 +17,7 @@ function fakeRes() {
       statusCode: 200, headers: {},
       setHeader(k, v) { this.headers[k.toLowerCase()] = v; },
       getHeader(k) { return this.headers[k.toLowerCase()]; },
-      end(b) { this.body = b ? String(b) : ''; this.json = this.body ? JSON.parse(this.body) : null; resolve(this); }
+      end(b) { this.raw = b; this.body = b ? String(b) : ''; try { this.json = this.body ? JSON.parse(this.body) : null; } catch (e) { this.json = null; } resolve(this); }
     };
     fakeRes.last = res;
   });

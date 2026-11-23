@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHandler } = require('../api/wishes.js');
+const { createPhotoHandler } = require('../api/photo.js');
 const { call } = require('./helpers.js');
 const { createMemoryStore } = require('../lib/memory-store.js');
 const memoryStore = () => createMemoryStore();
@@ -61,7 +62,7 @@ test('POST rejects non-JSON (415), other origins (403), bad JSON (400), empty wi
   assert.equal((await call(h, post({ wish: 'x' }, { origin: 'https://evil.example' }))).statusCode, 403);
   assert.equal((await call(h, { method: 'POST', headers: JSON_H, body: '{nope' })).json.error, 'bad_json');
   assert.equal((await call(h, post({ wish: '   ' }))).json.error, 'empty');
-  assert.equal((await call(h, post({ wish: 'x'.repeat(5000) }))).statusCode, 413);
+  assert.equal((await call(h, post({ wish: 'x'.repeat(60000) }))).statusCode, 413);
 });
 
 test('POST strips tags/control chars and truncates name to 40 and wish to 80', async () => {
@@ -112,4 +113,42 @@ test('review fix: bidi control characters are stripped before storing', async ()
 test('review fix: a storage error on GET is a 503, so the big-screen counter keeps its last value', async () => {
   const h = createHandler({ store: { list: async () => { throw new Error('down'); } } });
   assert.equal((await call(h)).statusCode, 503);
+});
+
+const JPEG = 'data:image/jpeg;base64,' + Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9, 9]).toString('base64');
+const DESIGN = { base: 6, flowers: 3, topper: 4, leafColor: 2, leaf: [[0.5, 0], [1, 1], [0, 1]] };
+
+test('POST keeps a sanitized design and a photo; GET lists them and /api/photo serves the image', async () => {
+  const store = memoryStore(), h = createHandler({ store });
+  const r = await call(h, post({ name: 'ต้น', wish: 'ขอให้รวย', design: Object.assign({ evil: '<x>' }, DESIGN, { base: 42 }), photo: JPEG }));
+  assert.equal(r.statusCode, 201);
+  const w = (await call(h)).json.wishes[0];
+  assert.deepEqual(w.design, Object.assign({}, DESIGN, { base: 0 }));
+  assert.equal(w.photo, true);
+  const p = await call(createPhotoHandler({ store }), { url: '/api/photo?id=' + r.json.id });
+  assert.equal(p.statusCode, 200);
+  assert.equal(p.headers['content-type'], 'image/jpeg');
+  assert.match(p.headers['cache-control'], /max-age=86400/);
+  assert.deepEqual(Buffer.from(p.raw), Buffer.from(JPEG.split(',')[1], 'base64'));
+});
+
+test('POST rejects a photo that is not a small JPEG (422 bad_photo) and a photo without a name (400 photo_needs_name)', async () => {
+  const h = createHandler({ store: memoryStore() });
+  const bad = await call(h, post({ name: 'ต้น', wish: 'x', photo: 'data:image/svg+xml;base64,PHN2Zz4=' }));
+  assert.equal(bad.statusCode, 422); assert.equal(bad.json.error, 'bad_photo');
+  const anon = await call(h, post({ wish: 'x', photo: JPEG }, { 'x-real-ip': '7.7.7.7' }));
+  assert.equal(anon.statusCode, 400); assert.equal(anon.json.error, 'photo_needs_name');
+});
+
+test('a design that is not an object is dropped, the wish still posts', async () => {
+  const store = memoryStore(), h = createHandler({ store });
+  assert.equal((await call(h, post({ wish: 'x', design: 'boom' }))).statusCode, 201);
+  assert.equal((await call(h)).json.wishes[0].design, undefined);
+});
+
+test('/api/photo: bad id 400, unknown id 404, no store 404', async () => {
+  const ph = createPhotoHandler({ store: memoryStore() });
+  assert.equal((await call(ph, { url: '/api/photo?id=../../x' })).statusCode, 400);
+  assert.equal((await call(ph, { url: '/api/photo?id=abc123' })).statusCode, 404);
+  assert.equal((await call(createPhotoHandler({ store: null }), { url: '/api/photo?id=abc123' })).statusCode, 404);
 });

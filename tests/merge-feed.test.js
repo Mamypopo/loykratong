@@ -99,3 +99,14 @@ test('label cap: at most 8 wish cards on a phone and 16 on the big screen', () =
   assert.equal(egg._canFloat(15, true), true);
   assert.equal(egg._canFloat(16, true), false);
 });
+
+test('mergeFeed keeps the design and photo flag so friends see the krathong as it was made', () => {
+  const st = { seen: {}, mine: {} };
+  const d = { base: 6, flowers: 1, topper: 3, leafColor: 0, leaf: null };
+  const out = mergeFeed(st, [Object.assign(W('a'), { design: d, photo: true }), W('b')]);
+  const a = out.fresh.find((x) => x.id === 'a'), b = out.fresh.find((x) => x.id === 'b');
+  assert.deepEqual(JSON.parse(JSON.stringify(a.design)), d);
+  assert.equal(a.photo, true);
+  assert.equal(b.design, null);
+  assert.equal(b.photo, false);
+});
