@@ -2499,18 +2499,26 @@
       });
       g.visible = false;
       scene.add(g);
-      var u = { state: 'away', wait: 20, x: 34, z: -9.5, dir: -1, rip: 0 };
+      var u = { state: 'away', wait: 20, x: 34, z: -9.5, dir: -1, rip: 0, lastBeat: -1, salvo: false, shots: [] };
       return function (dt, now) {
         if (u.state === 'away') {
           u.wait -= dt;
-          if (u.wait <= 0) { u.state = 'passing'; u.dir = R() < 0.5 ? -1 : 1; u.x = -u.dir * 34; g.visible = true; partyInfo.passes++; }
+          if (u.wait <= 0) { u.state = 'passing'; u.dir = R() < 0.5 ? -1 : 1; u.x = -u.dir * 34; g.visible = true; partyInfo.passes++; u.salvo = false; }
           partyInfo.state = u.state;
           return;
         }
         u.x += u.dir * 3 * dt;
         if (Math.abs(u.x) > 34) { u.state = 'away'; u.wait = 45 + R() * 30; g.visible = false; partyInfo.state = u.state; return; }
         partyInfo.state = u.state;
-        var wy = wave(u.x, u.z, now), beat = now * 4.2;   // ~126 bpm
+        var wy = wave(u.x, u.z, now), beat = now * 2.1;   // ~126 bpm
+        var bn = Math.floor(beat);
+        if (bn !== u.lastBeat) { u.lastBeat = bn; if (sfx && sfx.beat) sfx.beat(Math.max(0, 1 - Math.abs(u.x) / 30) * 0.9, bn); }
+        // reaching the middle: a salvo of fireworks
+        if (!u.salvo && Math.abs(u.x) < 2) {
+          u.salvo = true; partyInfo.salvos = (partyInfo.salvos || 0) + 1;
+          for (var fs2 = 0; fs2 < 4; fs2++) u.shots.push(now + fs2 * 0.35);
+        }
+        while (u.shots.length && now >= u.shots[0]) { u.shots.shift(); launchRocket(u.x + (R() - 0.5) * 16); }
         g.position.set(u.x, wy - 0.12 + Math.abs(Math.sin(beat * Math.PI)) * 0.04, u.z);
         g.rotation.set(Math.sin(now * 1.3) * 0.02, u.dir > 0 ? Math.PI : 0, Math.sin(now * 1.7) * 0.025);   // bow (−x) leads
         dancers.forEach(function (dn, i) {
@@ -2838,7 +2846,7 @@
       return pts;
     }
     var rocketPool = [], burstPool = [];
-    for (var rpI = 0; rpI < 6; rpI++) {
+    for (var rpI = 0; rpI < 10; rpI++) {
       var hd = sprite(softTex, 0xffffff, 1.6, 1); hd.visible = false; scene.add(hd);
       rocketPool.push({ active: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), col: new THREE.Color(), head: hd, trail: additivePoints(0.8, TRAIL), fuse: 0 });
     }
@@ -3386,7 +3394,7 @@
       stats: function () {
         return { tier: tier, gpu: env.gpu || '', pixelRatio: PR, bloom: !!composer, fpsCap: perf.cap || null, fps: Math.round(1000 / perf.ema),
           worstFrameMs: Math.round(perf.worst), hitches: +perf.spikes.toFixed(1), degradeSteps: perf.step, drawCalls: renderer.info.render.calls,
-          dog: { state: dogInfo.state, charges: dogInfo.charges, bumps: dogInfo.bumps }, party: { state: partyInfo.state, passes: partyInfo.passes } };
+          dog: { state: dogInfo.state, charges: dogInfo.charges, bumps: dogInfo.bumps }, party: { state: partyInfo.state, passes: partyInfo.passes, salvos: partyInfo.salvos || 0 } };
       },
       resize: resize,
       launchAt: launchAt,
@@ -3643,6 +3651,14 @@
           var t = ctx.currentTime + 0.01;
           pluck(t, 88, 0.12, sfx); pluck(t + 0.08, 95, 0.14, sfx);
           tone(t + 0.08, mtof(107), 'sine', 0.03, 0.4, sfx);
+        },
+        beat: function (vol, n) {
+          if (stopped || ctx.state !== 'running' || !(vol > 0.02)) return;
+          var t = ctx.currentTime + 0.01, v = Math.min(1, vol);
+          tone(t, 150, 'sine', 0.55 * v, 0.28, sfx, 42);                                   // kick: ตึ้ด
+          noiseHit(t, 'lowpass', 180, 0.8, 0.25 * v, 0.08, sfx);                              // its thump
+          noiseHit(t + 0.12, 'highpass', 7000, 0.7, 0.05 * v + 0.0001, 0.04, sfx);         // off-beat hat
+          if (n % 2 === 0) tone(t, [55, 55, 65.4, 49][(n >> 1) % 4], 'sawtooth', 0.09 * v, 0.22, sfx);   // bass line
         },
         launch: function (wish) {
           if (stopped || ctx.state !== 'running') return;
