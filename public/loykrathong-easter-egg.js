@@ -3391,7 +3391,7 @@
       setTimeout(function () { if (p.parentNode) p.parentNode.removeChild(p); }, 1000);
     }
 
-    // other users' wishes: poll the feed; each one this device has not seen floats past once, a few seconds apart
+    // other users' wishes: poll the feed; each one floated after we opened floats past once, a few seconds apart
     var feed = opts.demo ? null : makeFeed(opts.wishFeed);
     // ids of wishes sent from this browser: kept across reloads so your own never come back to you as "others"
     var MINE_KEY = 'lk-mine', mineIds = {};
@@ -3413,9 +3413,8 @@
     function feedFetch() {
       Promise.resolve(feed.load(50)).then(function (d) {
         var m = mergeFeed(feedState, d && d.wishes);
-        if (firstFetch) {   // wishes from before we opened that this device has not seen: just the newest few
+        if (firstFetch) {   // wishes from before we opened stay off the river (they are in the gallery): only live ones float
           firstFetch = false;
-          freshQueue = m.fresh.slice(-3);
         } else {
           freshQueue = freshQueue.concat(m.fresh);
           if (freshQueue.length > FRESH_MAX) freshQueue = freshQueue.slice(freshQueue.length - FRESH_MAX);
