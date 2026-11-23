@@ -30,8 +30,8 @@ const path = require('path');
 
 const PORT = Number(process.env.PORT) || 5173;
 const HOST = process.env.HOST || '127.0.0.1';
-const ROOT = __dirname;
-const DATA_FILE = process.env.DATA_FILE || path.join(ROOT, 'wishes.json');
+const ROOT = path.join(__dirname, 'public');
+const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'wishes.json');
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const MAX_STORED = 2000;          // keep the newest N wishes
 const MAX_NAME = 40, MAX_WISH = 80;
@@ -51,7 +51,7 @@ const MIME = {
   '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.json': 'application/json; charset=utf-8', '.ico': 'image/x-icon'
 };
 // only these files may be served (never the server, its data or dotfiles)
-const PUBLIC = new Set(['index.html', 'loykrathong-easter-egg.js', 'semed-logo.png']);
+const PUBLIC = new Set(['index.html', 'app.js', 'filter.js', 'loykrathong-easter-egg.js', 'semed-logo.png']);
 // files other websites embed: served with CORS so <script>, fonts and WebGL textures work cross-site
 const SHARED_ASSETS = new Set(['loykrathong-easter-egg.js', 'semed-logo.png']);
 
