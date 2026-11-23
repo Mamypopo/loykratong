@@ -1812,8 +1812,8 @@
         if (!st8.active || slice) return;
         setNdc(e);
         if (st8.mode === 'cut') { st8.drag = { cut: true }; moveKnife(e); return; }
-        var hit = st8.tool || st8.view ? -1 : pickItem();
-        if (hit < 0 && !st8.tool && !st8.view) hit = pickItemNear(e);
+        var hit = st8.view ? -1 : pickItem();
+        if (hit < 0 && !st8.view) hit = pickItemNear(e);
         // an item already selected moves wherever you drag on the table, so you never have to hit it exactly;
         // with nothing selected, a drag spins the krathong
         var idx = hit >= 0 ? hit : st8.tool || st8.view ? -1 : st8.sel;
@@ -1854,7 +1854,7 @@
         if (!dr) return;
         if (dr.cut) { doCut(); return; }
         if (dr.idx >= 0 && dr.moved) { if (st8.hooks.change) st8.hooks.change(); return; }
-        if (dr.hit >= 0) return;   // a tap on an item: it is selected
+        if (dr.hit >= 0) { if (st8.tool && st8.hooks.placed) st8.hooks.placed(dr.hit); return; }   // a tap on an item: it is selected
         if (dr.moved || st8.view) return;
         // a tap: place the chosen thing here, or deselect
         setNdc(e);
@@ -1870,7 +1870,7 @@
           rebuild();
           if (sfx) sfx.launch(false);
           if (st8.hooks.change) st8.hooks.change();
-          if (st8.hooks.select) st8.hooks.select(st8.sel);
+          if (st8.hooks.placed) st8.hooks.placed(st8.sel); else if (st8.hooks.select) st8.hooks.select(st8.sel);
         } else if (st8.sel >= 0) {
           st8.sel = -1; updateRing(); if (st8.hooks.select) st8.hooks.select(-1);
         }
@@ -1966,11 +1966,20 @@
           if (!it) return;
           if (op.remove) { items.splice(st8.sel, 1); st8.sel = -1; rebuild(); }
           else {
+            var o0 = itemObj(st8.sel);
             if (op.rotate) it.r = Math.round((((it.r + op.rotate) % 6.28) + 6.28) % 6.28 * 100) / 100;
             if (op.scale) it.s = Math.round(Math.max(DZ.SCALE_MIN, Math.min(DZ.SCALE_MAX, it.s * op.scale)) * 100) / 100;
             if (op.lift) it.p[1] = Math.round(Math.max(-0.9, Math.min(3.9, it.p[1] + op.lift)) * 100) / 100;
+            if (op.nudge) {
+              var ya = -stage.rotation.y, ox = op.nudge[0], oz = -op.nudge[1];   // screen right / away from you
+              var nx = it.p[0] + ox * Math.cos(ya) - oz * Math.sin(ya), nz = it.p[2] + ox * Math.sin(ya) + oz * Math.cos(ya);
+              var nr = Math.sqrt(nx * nx + nz * nz);
+              if (nr > 1.8) { nx *= 1.8 / nr; nz *= 1.8 / nr; }
+              it.p[0] = Math.round(nx * 100) / 100; it.p[2] = Math.round(nz * 100) / 100;
+              if (o0) o0.position.x = it.p[0];
+            }
             var o = itemObj(st8.sel);
-            if (o) { o.rotation.y = it.r; o.scale.setScalar(it.s); o.position.y = it.p[1]; }
+            if (o) { o.rotation.y = it.r; o.scale.setScalar(it.s); o.position.set(it.p[0], it.p[1], it.p[2]); updateRing(); }
           }
           if (st8.hooks.change) st8.hooks.change();
         }

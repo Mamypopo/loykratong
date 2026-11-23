@@ -56,7 +56,7 @@
     '.lkw-wrap .lkw-thumb{width:52px;height:52px;border-radius:10px;background:#fffaf0;padding:0;border:2px solid transparent}',
     '.lkw-wrap .lkw-thumb[aria-pressed="true"]{border-color:#ffe07a}',
     '.lkw-wrap .lkw-thumb canvas{width:100%;height:100%;display:block}',
-    '.lkw-edit{position:absolute;left:50%;transform:translateX(-50%);z-index:21;top:calc(max(10px,env(safe-area-inset-top)) + 118px);display:flex;gap:6px;padding:6px;border-radius:999px;background:rgba(30,14,8,.85);border:1.5px solid rgba(255,226,122,.5)}',
+    '.lkw-edit{position:absolute;left:50%;transform:translateX(-50%);z-index:21;top:calc(max(10px,env(safe-area-inset-top)) + 118px);display:flex;flex-wrap:wrap;justify-content:center;width:max-content;max-width:calc(100vw - 20px);gap:6px;padding:6px;border-radius:24px;background:rgba(30,14,8,.85);border:1.5px solid rgba(255,226,122,.5)}',
     '.lkw-edit[hidden]{display:none}',
     '.lkw-wrap .lkw-edit button{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.1);font-size:17px}',
     '.lkw-wrap :focus-visible{outline:2px solid #ffe07a;outline-offset:2px}',
@@ -143,6 +143,7 @@
     sheet.appendChild(tabs); sheet.appendChild(body);
     var edit = el('div', 'lkw-edit'); edit.hidden = true; edit.setAttribute('aria-label', 'แก้ของที่เลือก');
     [['⟲', 'หมุนซ้าย', { rotate: 0.4 }], ['⟳', 'หมุนขวา', { rotate: -0.4 }], ['＋', 'ใหญ่ขึ้น', { scale: 1.2 }], ['－', 'เล็กลง', { scale: 1 / 1.2 }],
+      ['←', 'เลื่อนซ้าย', { nudge: [-0.12, 0] }], ['→', 'เลื่อนขวา', { nudge: [0.12, 0] }], ['↑', 'เลื่อนไปข้างหลัง', { nudge: [0, 0.12] }], ['↓', 'เลื่อนมาข้างหน้า', { nudge: [0, -0.12] }],
       ['⬆', 'ยกขึ้น', { lift: 0.1 }], ['⬇', 'กดลง', { lift: -0.1 }], ['🗑', 'ลบ', { remove: true }]].forEach(function (a) {
       edit.appendChild(btn('', a[0], function () { table.edit(a[2]); if (a[2].remove) showEdit(-1); }, a[1]));
     });
@@ -155,7 +156,7 @@
     function setHint(t) { hint.textContent = t || ''; }
     function showEdit(i) {
       edit.hidden = i < 0;
-      if (i >= 0) { var it = look.design.items[i]; setHint('ลากเพื่อเลื่อน' + (it ? D.ITEMS[it.k].name : '') + ' ไปซ้าย ขวา หน้า หลัง ⬆⬇ ปรับความสูง'); }
+      if (i >= 0) { var it = look.design.items[i]; setHint('ลากหรือกดลูกศรเพื่อเลื่อน' + (it ? D.ITEMS[it.k].name : '') + ' ⬆⬇ ปรับความสูง ✓ เสร็จ'); }
       else if (!tool) setHint('');
     }
     function setTool(t, label) {
@@ -463,6 +464,11 @@
       if (o.onDone) o.onDone(result);
     }
     function onKey(e) {
+      // arrow keys move the selected item (not while typing in a field)
+      var arrows = { ArrowLeft: [-0.12, 0], ArrowRight: [0.12, 0], ArrowUp: [0, 0.12], ArrowDown: [0, -0.12] };
+      if (arrows[e.key] && table.selected() >= 0 && !/^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName || '')) {
+        e.preventDefault(); table.edit({ nudge: arrows[e.key] }); return;
+      }
       if (e.key !== 'Escape') return;
       e.stopPropagation();
       if (tool) { setTool(null); render(); } else if (table.selected() >= 0) { table.select(-1); showEdit(-1); } else finish(undefined);
@@ -472,6 +478,9 @@
     table.open(look, {
       change: function () { if (tab === 'stick') render(); },
       select: function (i) { showEdit(i); },
+      // something was just stuck on (or an existing item tapped while placing): the tool switches off and
+      // the item stays selected, ready to drag
+      placed: function (i) { tool = null; table.tool(null); table.select(i); render(); showEdit(i); },
       miss: function () { toast('แตะบนตัวกระทงนะ'); },
       full: function () { toast('ติดของได้สูงสุด ' + D.MAX_ITEMS + ' ชิ้นนะ'); },
       cut: function (h) {
