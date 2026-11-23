@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const D = require('../public/design.js');
 
 const tri = [[0.5, 1], [0, 0], [1, 0]];
-const DEF = { v: 2, base: 6, trunk: 0.4, leaf: null, leafColor: 0, petals: 11, flowers: 0, items: [], doodles: [] };
+const DEF = { v: 2, base: 6, material: 0, trunk: 0.4, leaf: null, leafColor: 0, petals: 11, flowers: 0, items: [], doodles: [] };
 
 test('sanitize fills defaults and keeps valid choices', () => {
   assert.deepEqual(D.sanitize({}), DEF);
@@ -101,4 +101,11 @@ test('photoOk accepts a small JPEG data URL only', () => {
   assert.equal(D.photoOk('data:image/jpeg;base64,' + Buffer.from('<svg>').toString('base64')), false);
   assert.equal(D.photoOk('data:image/jpeg;base64,' + 'A'.repeat(D.MAX_PHOTO_CHARS)), false);
   assert.equal(D.photoOk(null), false);
+});
+
+test('material: five things to cut a base from, unknown ones fall back to banana trunk', () => {
+  assert.deepEqual(D.MATERIALS.map((m) => m.id), ['banana', 'bread', 'coconut', 'ice', 'watermelon']);
+  assert.equal(D.sanitize({ material: 3 }).material, 3);
+  assert.equal(D.sanitize({ material: 9 }).material, 0);
+  assert.equal(D.sanitize({ material: '2' }).material, 0);
 });

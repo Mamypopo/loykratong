@@ -31,7 +31,7 @@
     '.lkw-wrap .lkw-opt{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 4px;border-radius:14px;background:rgba(255,255,255,.07);border:2px solid transparent;font-size:12px;line-height:1.2}',
     '.lkw-wrap .lkw-opt b{font-size:24px;font-weight:400;line-height:1}',
     '.lkw-wrap .lkw-opt[aria-pressed="true"]{border-color:#ffe07a;background:rgba(255,224,122,.16)}',
-    '.lkw-wrap .lkw-big{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:16px;background:linear-gradient(#7fd88f,#3f8a5a);box-shadow:0 4px 0 #22573a;font-size:16px;margin-bottom:12px;text-align:left}',
+    '.lkw-wrap .lkw-big{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:16px;background:linear-gradient(#7fd88f,#3f8a5a);box-shadow:0 4px 0 #22573a;font-size:16px;margin-bottom:10px;text-align:left}',
     '.lkw-wrap .lkw-big:disabled{opacity:.45;cursor:default}',
     '.lkw-wrap .lkw-big b{font-size:30px;font-weight:400}',
     '.lkw-wrap .lkw-big small{display:block;font-size:12px;opacity:.85}',
@@ -173,16 +173,25 @@
     // ---- base: cut the trunk, or pick a ready-made base
     function basePanel() {
       var box = el('div');
+      var mat = D.MATERIALS[look.design.material] || D.MATERIALS[0];
       var cut = btn('lkw-big', '', function () {
         setTool(null);
         table.mode('cut');
-        setHint('🔪 เลื่อนมีดไปตรงที่จะตัด แล้วกด/ปล่อยนิ้วเพื่อตัด ยิ่งตัดหนา ฐานยิ่งสูง');
+        setHint('🔪 เลื่อนมีดไปตรงที่จะตัด' + mat.name + ' แล้วกด/ปล่อยนิ้วเพื่อตัด ยิ่งตัดหนา ฐานยิ่งสูง');
       });
       cut.appendChild(el('b', null, '🔪'));
-      var tx = el('span', null, 'ตัดต้นกล้วยเอง');
+      var tx = el('span', null, 'ตัด' + mat.name + 'ทำฐาน');
       tx.appendChild(el('small', null, look.design.base === D.CUSTOM_BASE ? 'ฐานตอนนี้สูง ' + Math.round(look.design.trunk * 10) + ' นิ้ว แตะเพื่อตัดใหม่' : 'ตัดเป็นแว่น แล้วเอามาทำฐาน'));
       cut.appendChild(tx);
       box.appendChild(cut);
+      // what to cut it from
+      var mg = el('div', 'lkw-chips'); mg.setAttribute('role', 'group'); mg.setAttribute('aria-label', 'วัสดุทำฐาน');
+      D.MATERIALS.forEach(function (m, i) {
+        var b = btn('lkw-chip', m.icon + ' ' + m.name, function () { look.design.material = i; look.design.base = D.CUSTOM_BASE; changed(); render(); });
+        b.setAttribute('aria-pressed', String(look.design.base === D.CUSTOM_BASE && look.design.material === i));
+        mg.appendChild(b);
+      });
+      box.appendChild(mg);
       box.appendChild(el('div', 'lkw-label', 'หรือใช้ฐานสำเร็จ'));
       var g = el('div', 'lkw-grid');
       D.BASES.slice(0, D.CUSTOM_BASE).forEach(function (n, i) {
@@ -457,7 +466,7 @@
       cut: function (h) {
         look.design.base = D.CUSTOM_BASE; look.design.trunk = h;
         changed(); setHint('');
-        toast('🔪 ฉับ! ได้ฐานสูง ' + Math.round(h * 10) + ' นิ้ว ต่อไปตัดกลีบใบตองกัน');
+        toast('🔪 ฉับ! ได้ฐาน' + (D.MATERIALS[look.design.material] || D.MATERIALS[0]).name + 'สูง ' + Math.round(h * 10) + ' นิ้ว ต่อไปตัดกลีบใบตองกัน');
         tab = 'leaf'; render();
       }
     });

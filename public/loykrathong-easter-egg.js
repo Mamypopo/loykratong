@@ -1285,14 +1285,78 @@
     var trunkSideMat = toon(0xb9c77a);
     function trunkGeo(h) { return new THREE.CylinderGeometry(1, 1.04, h, 28); }
 
-    // 7) cut-your-own krathong: a slice of banana trunk as tall as you cut it, petals in the shape you drew
+    // banana trunk, bread, coconut, ice, watermelon: { side, top } materials, made once each
+    var MATSETS = {};
+    function speckle(ctx, n, col, r, x0, y0, w, h) {
+      ctx.fillStyle = col;
+      for (var i = 0; i < n; i++) { ctx.beginPath(); ctx.ellipse(x0 + R() * w, y0 + R() * h, r * (0.5 + R()), r * (0.4 + R() * 0.6), R() * 3, 0, 6.28); ctx.fill(); }
+    }
+    function matSet(m) {
+      if (MATSETS[m]) return MATSETS[m];
+      var side, top;
+      if (m === 1) {   // bread: golden crust, soft crumb with air holes
+        side = toon(0xffffff, { map: canvasTex(256, 64, function (ctx, w, h) {
+          ctx.fillStyle = '#b8732f'; ctx.fillRect(0, 0, w, h);
+          speckle(ctx, 60, 'rgba(140,80,30,.6)', 6, 0, 0, w, h); speckle(ctx, 40, 'rgba(225,160,90,.55)', 5, 0, 0, w, h);
+        }) });
+        top = toon(0xffffff, { map: canvasTex(256, 256, function (ctx) {
+          ctx.fillStyle = '#a8662a'; ctx.fillRect(0, 0, 256, 256);
+          ctx.fillStyle = '#f3dcaa'; ctx.beginPath(); ctx.arc(128, 128, 112, 0, 6.28); ctx.fill();
+          speckle(ctx, 140, 'rgba(214,176,110,.7)', 4, 40, 40, 176, 176);
+        }) });
+      } else if (m === 2) {   // coconut: hairy husk outside, white meat ring and shell inside
+        side = toon(0xffffff, { map: canvasTex(256, 64, function (ctx, w, h) {
+          ctx.fillStyle = '#7a4a24'; ctx.fillRect(0, 0, w, h);
+          for (var i = 0; i < 90; i++) { ctx.strokeStyle = i % 2 ? 'rgba(60,30,12,.7)' : 'rgba(170,120,70,.6)'; ctx.lineWidth = 1 + (i % 3); var x = R() * w; ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + (R() - 0.5) * 14, h); ctx.stroke(); }
+        }) });
+        top = toon(0xffffff, { map: canvasTex(256, 256, function (ctx) {
+          ctx.fillStyle = '#6b3d1c'; ctx.fillRect(0, 0, 256, 256);
+          ctx.fillStyle = '#fffaf0'; ctx.beginPath(); ctx.arc(128, 128, 104, 0, 6.28); ctx.fill();
+          ctx.fillStyle = '#efe6d2'; ctx.beginPath(); ctx.arc(128, 128, 82, 0, 6.28); ctx.fill();
+        }) });
+      } else if (m === 3) {   // ice: see-through, cold glow, cracks on the cut face
+        side = toon(0x8fd4ff, { transparent: true, opacity: 0.68, emissive: 0x1c4f78 });
+        top = toon(0xbfe6ff, { transparent: true, opacity: 0.8, emissive: 0x1c4f78, map: canvasTex(256, 256, function (ctx) {
+          ctx.fillStyle = '#cdeeff'; ctx.fillRect(0, 0, 256, 256);
+          ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 2;
+          for (var i = 0; i < 9; i++) { ctx.beginPath(); var x = 128, y = 128; ctx.moveTo(x, y); for (var j = 0; j < 4; j++) { x += (R() - 0.5) * 80; y += (R() - 0.5) * 80; ctx.lineTo(x, y); } ctx.stroke(); }
+          speckle(ctx, 30, 'rgba(255,255,255,.6)', 3, 20, 20, 216, 216);
+        }) });
+      } else if (m === 4) {   // watermelon: striped green skin, red flesh with black seeds
+        side = toon(0xffffff, { map: canvasTex(256, 64, function (ctx, w, h) {
+          ctx.fillStyle = '#7cb342'; ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = '#2e6b2f';
+          for (var x = 0; x < w; x += 32) { ctx.beginPath(); ctx.moveTo(x, 0); for (var y = 0; y <= h; y += 8) ctx.lineTo(x + 6 + Math.sin(y * 0.4 + x) * 4, y); ctx.lineTo(x + 18, h); for (var y2 = h; y2 >= 0; y2 -= 8) ctx.lineTo(x + 18 + Math.sin(y2 * 0.4 + x) * 4, y2); ctx.fill(); }
+        }) });
+        top = toon(0xffffff, { map: canvasTex(256, 256, function (ctx) {
+          ctx.fillStyle = '#2e6b2f'; ctx.fillRect(0, 0, 256, 256);
+          ctx.fillStyle = '#e8f5c8'; ctx.beginPath(); ctx.arc(128, 128, 116, 0, 6.28); ctx.fill();
+          ctx.fillStyle = '#ef3b4f'; ctx.beginPath(); ctx.arc(128, 128, 104, 0, 6.28); ctx.fill();
+          ctx.fillStyle = '#1b1030';
+          for (var k = 0; k < 16; k++) { var a = k / 16 * 6.28, rr = 55 + (k % 2) * 22; ctx.beginPath(); ctx.ellipse(128 + Math.cos(a) * rr, 128 + Math.sin(a) * rr, 3.5, 7, a, 0, 6.28); ctx.fill(); }
+        }) });
+      } else {   // banana trunk
+        side = trunkSideMat; top = trunkTop();
+      }
+      return (MATSETS[m] = { side: side, top: top });
+    }
+
+    // 7) cut-your-own krathong: a slice (banana trunk, bread, coconut, ice, watermelon) as tall as you cut it,
+    //    petals in the shape you drew
     function styleCustom(g, set, d) {
       var tone = DZ.LEAF_TONES[d.leafColor] || DZ.LEAF_TONES[0];
       var pts = d.leaf || DZ.PRESET_LEAVES[0].points;
       var h = d.trunk, bottom = -0.19, top = bottom + h;
-      var base = withOutline(new THREE.Mesh(trunkGeo(h), [trunkSideMat, trunkTop(), trunkTop()]));
-      base.position.y = bottom + h / 2; g.add(base);
-      var band = withOutline(new THREE.Mesh(geoCache.band, mats.band)); band.position.y = top - 0.17; g.add(band);
+      var ms = matSet(d.material);
+      if (d.material === 2) {   // coconut: a half-shell bowl as deep as you cut it, white meat ring on the rim
+        var bowl = withOutline(new THREE.Mesh(new THREE.SphereGeometry(1.02, 28, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), ms.side));
+        bowl.position.y = top; bowl.scale.y = h; g.add(bowl);
+        var meat = new THREE.Mesh(new THREE.RingGeometry(0.8, 1.02, 32), ms.top); meat.rotation.x = -Math.PI / 2; meat.position.y = top + 0.005; g.add(meat);
+      } else {
+        var base = withOutline(new THREE.Mesh(trunkGeo(h), [ms.side, ms.top, ms.top]));
+        base.position.y = bottom + h / 2; g.add(base);
+      }
+      if (!d.material) { var band = withOutline(new THREE.Mesh(geoCache.band, mats.band)); band.position.y = top - 0.17; g.add(band); }
       var n = d.petals, big = cutLeafGeo(pts, tone, 1), small = cutLeafGeo(pts, tone, 0.7), leaves = [];
       petalRing(leaves, big, n, 1.0, top - 0.02, 0.42, 0, false);
       petalRing(leaves, small, Math.max(4, n - 2), 0.78, top + 0.01, 0.22, Math.PI / n, false);
@@ -1630,6 +1694,15 @@
         var sa = st / 9 * Math.PI * 2;
         var streak = new THREE.Mesh(new THREE.BoxGeometry(4.1, 0.05, 0.12), toon(0x7f9a4a));
         streak.position.set(0, Math.cos(sa) * 1.02, Math.sin(sa) * 1.02); streak.rotation.x = sa; trunk.add(streak);
+        streak.userData.bananaOnly = true;
+      }
+      var logMaterial = 0;
+      function setLogMaterial(m) {
+        if (m === logMaterial) return;
+        logMaterial = m;
+        var ms = matSet(m);
+        tBody.material = [ms.side, ms.top, ms.top];
+        trunk.children.forEach(function (c) { if (c.userData.bananaOnly) c.visible = !m; });
       }
       trunk.position.set(0.6, 0.8, -6.5); ts.add(trunk);
       // knife: blade + handle, shown while cutting
@@ -1664,6 +1737,7 @@
         if (st8.k) { stage.remove(st8.k); disposeKrathong(st8.k); st8.k = null; }
         st8.k = makeKrathong(0, st8.look, { separateItems: true });
         stage.add(st8.k);
+        setLogMaterial(DZ.sanitize(st8.look.design).material);
         updateRing();
       }
       function itemObj(i) {
@@ -1774,7 +1848,8 @@
       }
       function doCut() {
         var h = Math.round((TRUNK_END - st8.knifeX) * 100) / 100;
-        slice = withOutline(new THREE.Mesh(trunkGeo(h), [trunkSideMat, trunkTop(), trunkTop()]));
+        var sm = matSet(logMaterial);
+        slice = withOutline(new THREE.Mesh(trunkGeo(h), [sm.side, sm.top, sm.top]));
         slice.userData = { t: 0, h: h, from: new THREE.Vector3(TRUNK_END - h / 2, trunk.position.y, trunk.position.z) };
         slice.position.copy(slice.userData.from); slice.rotation.z = Math.PI / 2;
         ts.add(slice);

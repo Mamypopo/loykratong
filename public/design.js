@@ -1,7 +1,8 @@
 /* Krathong design ("สูตรกระทง") shared by the browser (workshop table + river scene) and the API.
  * Friends and the big screen rebuild the same 3D krathong from this small JSON, so everyone sees the same shape.
  *   { v: 2,
- *     base: 0..6        0-5 ready-made styles, 6 = a slice of banana trunk you cut yourself
+ *     base: 0..6        0-5 ready-made styles, 6 = a slice you cut yourself
+ *     material: 0..4    what the slice is cut from: banana trunk, bread, coconut, ice, watermelon (base 6)
  *     trunk: 0.2..0.9   height of the slice you cut (base 6)
  *     leaf, leafColor, petals   petal outline you drew (0..1, y up), its colour, how many around the rim (base 6)
  *     flowers: 0..4     flower colours of the ready-made styles
@@ -18,6 +19,12 @@
 
   var BASES = ['ใบตอง', 'ดอกบัว', 'ขนมปัง', 'กะลามะพร้าว', 'หงส์', 'เต่า', 'ตัดต้นกล้วยเอง'];
   var CUSTOM_BASE = 6;
+  // what you cut your own base from (order is part of the saved data: only ever append)
+  var MATERIALS = [
+    { id: 'banana', name: 'ต้นกล้วย', icon: '🍌' }, { id: 'bread', name: 'ขนมปัง', icon: '🍞' },
+    { id: 'coconut', name: 'มะพร้าว', icon: '🥥' }, { id: 'ice', name: 'น้ำแข็ง', icon: '🧊' },
+    { id: 'watermelon', name: 'แตงโม', icon: '🍉' }
+  ];
   var FLOWERS = ['ดาวเรือง', 'กุหลาบชมพู', 'มะลิ', 'แดงส้ม', 'ม่วงพาสเทล'];
   var FLOWER_COLORS = [
     ['#ffa31a', '#ffc43d', '#ff7f2a'], ['#ff6f9e', '#ffa1c1', '#fff0f5'], ['#ffffff', '#ffe38a', '#c89bff'],
@@ -130,6 +137,7 @@
     return {
       v: 2,
       base: pick(d.base, BASES.length, CUSTOM_BASE),
+      material: pick(d.material, MATERIALS.length, 0),
       trunk: clamp(d.trunk, TRUNK_MIN, TRUNK_MAX, TRUNK_DEFAULT),
       leaf: cleanLeaf(d.leaf),
       leafColor: pick(d.leafColor, LEAF_COLORS.length, 0),
@@ -188,7 +196,7 @@
   }
 
   return {
-    BASES: BASES, CUSTOM_BASE: CUSTOM_BASE, FLOWERS: FLOWERS, FLOWER_COLORS: FLOWER_COLORS,
+    BASES: BASES, CUSTOM_BASE: CUSTOM_BASE, MATERIALS: MATERIALS, FLOWERS: FLOWERS, FLOWER_COLORS: FLOWER_COLORS,
     LEAF_COLORS: LEAF_COLORS, LEAF_TONES: LEAF_TONES, ITEMS: ITEMS, ITEM: ITEM, INK: INK, PRESET_LEAVES: PRESET_LEAVES,
     TRUNK_MIN: TRUNK_MIN, TRUNK_MAX: TRUNK_MAX, TRUNK_DEFAULT: TRUNK_DEFAULT, PETALS_MIN: PETALS_MIN, PETALS_MAX: PETALS_MAX,
     SCALE_MIN: SCALE_MIN, SCALE_MAX: SCALE_MAX,
