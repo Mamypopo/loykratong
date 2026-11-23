@@ -10,7 +10,7 @@
   else root.LoyKrathongShelf = api;
 })(typeof self !== 'undefined' ? self : this, function (root) {
   'use strict';
-  var KEY = 'lk-shelf', OLD_KEY = 'lk-look', MAX = 12;
+  var KEY = 'lk-shelf', OLD_KEY = 'lk-look', MAX = 12, RANDOM = 'random';
   function D() { return (root && root.LoyKrathongDesign) || (typeof module === 'object' && module.exports ? require('./design.js') : null); }
 
   function newKid() { return (Date.now().toString(36) + Math.random().toString(36).slice(2, 10)).slice(0, 20); }
@@ -41,7 +41,7 @@
         if (storage) storage.removeItem(OLD_KEY);
       } catch (e) { /* ignore */ }
     }
-    if (!get(state.sel)) state.sel = state.items.length ? state.items[0].kid : null;
+    if (state.sel !== RANDOM && !get(state.sel)) state.sel = state.items.length ? state.items[0].kid : RANDOM;
 
     function save() {
       try { if (storage) storage.setItem(KEY, JSON.stringify(state)); saveOk = true; } catch (e) { saveOk = false; }
@@ -53,7 +53,19 @@
       items: function () { return state.items.slice(); },
       get: get,
       selected: function () { return get(state.sel); },
-      select: function (kid) { if (get(kid)) { state.sel = kid; save(); } },
+      // kid, or null = a random krathong every time
+      select: function (kid) { if (kid == null) { state.sel = RANDOM; save(); } else if (get(kid)) { state.sel = kid; save(); } },
+      isRandom: function () { return state.sel === RANDOM; },
+      // a ready-made style (base 0-5) as it is: reuse the plain one already on the shelf, or add it
+      usePreset: function (base) {
+        if (!D() || !(base >= 0 && base < D().CUSTOM_BASE && base % 1 === 0)) return null;
+        var plain = cleanLook({ design: { base: base } }), want = JSON.stringify(plain.design);
+        for (var i = 0; i < state.items.length; i++) {
+          var it = state.items[i];
+          if (!it.look.photo && JSON.stringify(it.look.design) === want) { state.sel = it.kid; save(); return it.kid; }
+        }
+        return this.add(plain);
+      },
       add: function (look) {
         var l = cleanLook(look);
         if (!l || state.items.length >= MAX) return null;
@@ -69,7 +81,7 @@
       },
       remove: function (kid) {
         state.items = state.items.filter(function (it) { return it.kid !== kid; });
-        if (state.sel === kid) state.sel = state.items.length ? state.items[0].kid : null;
+        if (state.sel === kid) state.sel = state.items.length ? state.items[0].kid : RANDOM;
         save();
       },
       markFloated: function (kid) { var it = get(kid); if (it) { it.floats++; save(); } },
@@ -100,6 +112,12 @@
     '.lks .lks-new b{font-size:34px;font-weight:400}',
     '.lks .lks-badge{position:absolute;top:10px;left:10px;background:#ffe07a;color:#4a2400;border-radius:999px;padding:2px 9px;font-size:12px}',
     '.lks .lks-note{font-size:12px;color:#bfb3e6;margin:12px 0 0}',
+    '.lks .lks-h{font-size:14px;color:#ffe9a8;margin:4px 0 8px}',
+    '.lks .lks-quick{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:12px;scrollbar-width:thin}',
+    '.lks .lks-q{flex:none;width:84px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:5px;border-radius:14px;background:rgba(255,255,255,.07);border:2px solid transparent;font-size:12px}',
+    '.lks .lks-q[aria-pressed="true"]{border-color:#ffe07a;background:rgba(255,224,122,.14)}',
+    '.lks .lks-q span.lks-qpic{width:72px;height:72px;border-radius:10px;background:radial-gradient(circle at 50% 40%,#5a3a24,#2b1a12);display:grid;place-items:center;overflow:hidden;font-size:30px}',
+    '.lks .lks-q img{width:100%;height:100%;object-fit:cover;display:block}',
     '.lks :focus-visible{outline:2px solid #ffe07a;outline-offset:2px}',
     '@media (min-width:900px){.lks{left:auto;right:20px;bottom:20px;width:520px;border-radius:20px;border:1.5px solid rgba(255,226,122,.5)}}'
   ].join('\n');
@@ -122,10 +140,10 @@
     box.addEventListener('click', function (e) { e.stopPropagation(); });
     var armed = null;   // kid waiting for a second tap on delete
 
-    function thumb(it, holder) {
+    function thumb(it, holder, icon) {
       var key = it.kid + ':' + it.at;
       if (thumbs[key]) { var im = el('img'); im.alt = ''; im.src = thumbs[key]; holder.appendChild(im); return; }
-      holder.textContent = '🪷';
+      holder.textContent = icon || '🪷';
       if (!o.snapshot) return;
       o.snapshot(it.look).then(function (url) {
         if (!url) return;
@@ -135,10 +153,38 @@
       });
     }
 
+    // ready-made krathongs and "random", one tap to use
+    var PRESET_ICONS = ['🍃', '🪷', '🍞', '🥥', '🦢', '🐢'];
+    function quickRow(sel) {
+      var row = el('div', 'lks-quick'), D = root.LoyKrathongDesign;
+      var rnd = btn('lks-q', null, function () { shelf.select(null); if (o.onPick) o.onPick(null); toast('🎲 ลอยครั้งไหนก็ได้กระทงแบบสุ่ม'); render(); }, 'สุ่มทุกครั้ง');
+      rnd.setAttribute('aria-pressed', String(shelf.isRandom()));
+      var rp = el('span', 'lks-qpic', '🎲'); rnd.appendChild(rp); rnd.appendChild(el('span', null, 'สุ่มทุกครั้ง'));
+      row.appendChild(rnd);
+      for (var i = 0; i < D.CUSTOM_BASE; i++) (function (base) {
+        var plain = JSON.stringify(D.sanitize({ base: base }));
+        var on = !!sel && !sel.look.photo && JSON.stringify(sel.look.design) === plain;
+        var b = btn('lks-q', null, function () {
+          var kid = shelf.usePreset(base);
+          if (!kid) { toast('ชั้นวางเต็มแล้ว ลบกระทงเก่าก่อนนะ'); return; }
+          if (o.onPick) o.onPick(kid); toast('✓ เลือกกระทง' + D.BASES[base] + 'แล้ว'); render();
+        }, 'กระทง' + D.BASES[base]);
+        b.setAttribute('aria-pressed', String(on));
+        var pic = el('span', 'lks-qpic');
+        thumb({ kid: 'preset' + base, at: 0, look: { design: { base: base }, photo: null } }, pic, PRESET_ICONS[base]);
+        b.appendChild(pic); b.appendChild(el('span', null, D.BASES[base]));
+        row.appendChild(b);
+      })(i);
+      return row;
+    }
+
     function render() {
       body.textContent = '';
-      var grid = el('div', 'lks-grid');
       var sel = shelf.selected();
+      body.appendChild(el('div', 'lks-h', 'เลือกแบบเร็ว'));
+      body.appendChild(quickRow(sel));
+      body.appendChild(el('div', 'lks-h', 'กระทงของฉัน'));
+      var grid = el('div', 'lks-grid');
       shelf.items().forEach(function (it) {
         var on = !!sel && sel.kid === it.kid;
         var card = el('div', 'lks-card'); if (on) card.setAttribute('aria-current', 'true');
@@ -163,7 +209,7 @@
         grid.appendChild(nb);
       }
       body.appendChild(grid);
-      body.appendChild(el('p', 'lks-note', 'กระทงเก็บไว้ในเครื่องนี้ (สูงสุด ' + MAX + ' ใบ) ใบที่เลือกจะลอยไปให้เพื่อนและจอใหญ่เห็นเมื่อกด ลอยกระทงของฉัน'));
+      body.appendChild(el('p', 'lks-note', 'กระทงเก็บไว้ในเครื่องนี้ (สูงสุด ' + MAX + ' ใบ) ใบที่เลือกจะลอยไปให้เพื่อนและจอใหญ่เห็นเมื่อกด ลอยกระทง กระทงสำเร็จกด ✏️ แก้ เพื่อติดของเพิ่มได้'));
     }
     function finish() {
       box.classList.remove('lks-in');

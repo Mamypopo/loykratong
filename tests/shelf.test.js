@@ -65,3 +65,24 @@ test('broken storage or a full disk never throws; save reports failure', () => {
   assert.equal(full.lastSaveOk(), false);
   assert.equal(createShelf(null).items().length, 0);
 });
+
+test('random mode: select(null) floats a random krathong and survives a reload', () => {
+  const st = memStorage();
+  const s = createShelf(st);
+  s.add(LOOK(1));
+  s.select(null);
+  assert.equal(s.selected(), null);
+  assert.equal(createShelf(st).selected(), null);
+});
+
+test('usePreset adds a ready-made krathong once and selects it', () => {
+  const s = createShelf(memStorage());
+  const a = s.usePreset(4);
+  assert.equal(s.selected().kid, a);
+  assert.equal(s.selected().look.design.base, 4);
+  s.select(null);
+  assert.equal(s.usePreset(4), a);          // same plain preset: reuse it
+  assert.equal(s.items().length, 1);
+  assert.equal(s.selected().kid, a);
+  assert.equal(s.usePreset(99), null);
+});

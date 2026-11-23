@@ -299,6 +299,7 @@
     '.lk-mine{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}',
     '.lk-egg .lk-btn-gallery{background:linear-gradient(#b9a4ff,#7a5ad8);color:#fff;box-shadow:0 4px 0 #4a2f9a,0 10px 24px rgba(0,0,0,.35);text-shadow:0 1px 2px rgba(0,0,0,.35)}',
     '.lk-making .lk-toast{top:30%}',
+    '.lk-egg .lk-toast{z-index:30}',
     '.lk-making .lk-bottom,.lk-making .lk-bottom *,.lk-making .lk-title,.lk-making .lk-labels,.lk-making .lk-close,.lk-making .lk-sound{opacity:0;pointer-events:none!important;transition:opacity .3s}',
     '.lk-btn:focus-visible,.lk-close:focus-visible{outline:3px solid #7bdff2;outline-offset:3px}',
     '.lk-egg .lk-close{pointer-events:auto;position:absolute;top:max(14px,env(safe-area-inset-top));right:14px;width:40px;height:40px;border-radius:50%;border:1.5px solid rgba(255,255,255,.4);background:rgba(20,8,60,.45);color:#fff;font-size:18px;line-height:1;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}',
@@ -3050,7 +3051,7 @@
       hintEl.textContent = myLook
         ? 'กด ลอยกระทงของฉัน ได้เลย จะพิมพ์คำอธิษฐานก่อนก็ได้ หรือแตะผิวน้ำเพื่อลอยเล่น'
         : 'แตะบนผิวน้ำเพื่อลอยกระทง หรือพิมพ์คำอธิษฐานด้านล่าง';
-      if (shelf) makeBtn.textContent = shelf.items().length ? '🧺 กระทงของฉัน (' + shelf.items().length + ')' : '✂️ ทำกระทงของฉัน';
+      if (shelf) makeBtn.textContent = shelf.items().length ? '🧺 กระทงของฉัน (' + shelf.items().length + ')' : '🧺 เลือก/ทำกระทง';
     }
     function syncLook() {
       var it = shelf && shelf.selected();
@@ -3080,7 +3081,6 @@
     }
     function openShelf() {
       if (!scene) return;
-      if (!shelf.items().length) { openWorkshop(null); return; }
       SH.open({
         container: root, shelf: shelf, snapshot: snapshot, toast: toast,
         onPick: function () { syncLook(); },
