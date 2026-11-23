@@ -1499,6 +1499,14 @@
       scene.add(k); krathongs.push(k);
       return k;
     }
+    // a bump (from the hippo-dog): spin, a wobble that settles, and a shove away from where it came from
+    function bumpKrathong(k, fx, fz, power) {
+      var d = k.userData, dx = k.position.x - fx, dz = k.position.z - fz, dl = Math.sqrt(dx * dx + dz * dz) || 1;
+      d.pvx = (d.pvx || 0) + dx / dl * 2.6 * power; d.pvz = (d.pvz || 0) + dz / dl * 2.6 * power;
+      d.bspin = (d.bspin || 0) + (R() < 0.5 ? -1 : 1) * (5 + R() * 4) * power;
+      d.wob = Math.min(0.55, (d.wob || 0) + 0.45 * power); d.wobT = 0; d.wobAx = Math.atan2(dz, dx);
+      ripple(k.position.x, k.position.z, 1.6);
+    }
     function disposeKrathong(k) {
       scene.remove(k);
       var el = k.userData.labelEl;
@@ -2150,6 +2158,7 @@
 
     // ---- the river "hippo-dog": a chubby black-and-tan dog that lives in the river like a hippo —
     // lurks with only eyes/ears/nose above water, floats, yawns, dives and resurfaces with a splash
+    var dogInfo = { state: '', charges: 0, bumps: 0 };   // for stats() / ?lkdebug=1
     var updateDog = (function makeDog() {
       var V3 = THREE.Vector3;
       var BLACK = 0x26242d, TAN = 0xc67a36, PINK = 0xd9637a;
@@ -2226,7 +2235,23 @@
       }
 
       var u = { state: 'under', st: 0, dur: 4.5, off: -2.8, pitch: 0.3, heading: 0.8, target: new V3(-5, 0, -10),
-        x: -6, z: -11, earFlick: 0, nextFlick: 2, nextSpray: 3, rip: 0, bub: 0 };
+        x: -6, z: -11, earFlick: 0, nextFlick: 2, nextSpray: 3, rip: 0, bub: 0, victim: null, hits: 0, rage: 0 };
+      // glowing red eyes while it rampages
+      var rageEyes = [-1, 1].map(function (s) {
+        var e = sprite(softTex, 0xff2a2a, 0.55, 0); e.position.set(0.27 * s, 0.88, 2.36); body.add(e); return e;
+      });
+      // the closest krathong ahead in reach (krathongs with a wish card count too: they get bumped, never capsized)
+      function pickVictim() {
+        var best = null, bd = Infinity;
+        krathongs.forEach(function (k) {
+          var p = k.position;
+          if (p.z > 1 || p.z < -26 || Math.abs(p.x) > 12 || k.userData.pop < 1) return;
+          var dd = (p.x - u.x) * (p.x - u.x) + (p.z - u.z) * (p.z - u.z);
+          if (dd < bd && dd > 1) { bd = dd; best = k; }
+        });
+        u.victim = best;
+        return best;
+      }
       var tmp = new V3();
       function pickTarget() { u.target.set(-9 + R() * 18, 0, -15 + R() * 8); }
       function setState(s, dur) {
@@ -2234,35 +2259,69 @@
         var wy = wave(u.x, u.z, t);
         if (s === 'dive') { ripple(u.x, u.z, 2.6); spray(u.x, wy + 0.2, u.z, 16, 3, 3); if (sfx) sfx.launch(false); }
         if (s === 'under') { pickTarget(); }
+        if (s === 'charge') { dogInfo.charges++; u.hits = 0; pickVictim(); u.earFlick = 1; spray(u.x, wy + 0.3, u.z, 20, 2.5, 3.5); ripple(u.x, u.z, 2.4); if (sfx) sfx.launch(false); }
         if (s === 'emerge') { ripple(u.x, u.z, 2.8); ripple(u.x, u.z, 1.8); spray(u.x, wy + 0.3, u.z, 26, 4, 4.5); u.earFlick = 1; if (sfx) sfx.launch(false); }
       }
-      var OFF = { lurk: -0.62, surface: -0.12, yawn: -0.08, dive: -2.8, under: -2.8, emerge: -0.5 };
-      var SPEED = { lurk: 0.5, surface: 0.25, yawn: 0, dive: 0.35, under: 1.4, emerge: 0.15 };
-      var PITCH = { lurk: -0.12, surface: 0, yawn: -0.42, dive: 0.55, under: 0.3, emerge: -0.22 };
+      var OFF = { lurk: -0.62, surface: -0.12, yawn: -0.08, dive: -2.8, under: -2.8, emerge: -0.5, charge: -0.25 };
+      var SPEED = { lurk: 0.5, surface: 0.25, yawn: 0, dive: 0.35, under: 1.4, emerge: 0.15, charge: 3.4 };
+      var PITCH = { lurk: -0.12, surface: 0, yawn: -0.42, dive: 0.55, under: 0.3, emerge: -0.22, charge: -0.18 };
 
       return function (dt, now) {
         u.st += dt;
         // behaviour: lurk → (float [+ yawn]) or dive → swim under → resurface
-        if (u.state === 'lurk' && u.st > u.dur) { if (R() < 0.45) setState('surface', 4 + R() * 2); else setState('dive', 1.4); }
+        if (u.state === 'lurk' && u.st > u.dur) {
+          var roll = R();
+          if (roll < 0.4 && pickVictim()) setState('charge', 8);   // berserk!
+          else if (roll < 0.7) setState('surface', 4 + R() * 2); else setState('dive', 1.4);
+        }
+        else if (u.state === 'charge' && (u.st > u.dur || u.hits >= 3 || !u.victim)) setState('lurk', 6 + R() * 4);
         else if (u.state === 'surface' && u.st > u.dur) { if (R() < 0.65) setState('yawn', 2.6); else setState('lurk', 6 + R() * 4); }
         else if (u.state === 'yawn' && u.st > u.dur) setState('lurk', 6 + R() * 4);
         else if (u.state === 'dive' && u.st > u.dur) setState('under', 3 + R() * 3);
         else if (u.state === 'under' && u.st > u.dur) setState('emerge', 1.3);
         else if (u.state === 'emerge' && u.st > u.dur) setState('lurk', 6 + R() * 4);
 
-        // slow swim toward a spot in the river, turning gently
+        // slow swim toward a spot in the river, turning gently (a charge chases its krathong and turns hard)
+        var charging = u.state === 'charge';
+        if (charging) {
+          if (u.victim && krathongs.indexOf(u.victim) < 0) pickVictim();
+          if (u.victim) u.target.set(u.victim.position.x, 0, u.victim.position.z);
+        }
         var dx = u.target.x - u.x, dz = u.target.z - u.z, dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist < 1.2) pickTarget();
-        u.heading = lerpAngle(u.heading, Math.atan2(dx, dz), Math.min(1, dt * (u.state === 'under' ? 1.5 : 0.6)));
+        if (dist < 1.2 && !charging) pickTarget();
+        u.heading = lerpAngle(u.heading, Math.atan2(dx, dz), Math.min(1, dt * (charging ? 4 : u.state === 'under' ? 1.5 : 0.6)));
         var sp = SPEED[u.state];
         u.x += Math.sin(u.heading) * sp * dt; u.z += Math.cos(u.heading) * sp * dt;
         // keep a polite distance from the kids and the big krathong up front
         for (var ki = 0; ki <= kids.length; ki++) {
+          if (ki === kids.length && charging) break;   // the big krathong is fair game while it rampages
           var o = ki < kids.length ? kids[ki] : hero;
           var ox = u.x - o.position.x, oz = u.z - o.position.z, od = Math.sqrt(ox * ox + oz * oz);
           if (od < 3.2 && od > 0.001) { u.x += ox / od * (3.2 - od) * dt * 2; u.z += oz / od * (3.2 - od) * dt * 2; }
         }
-        u.x = Math.max(-10, Math.min(10, u.x)); u.z = Math.max(-16, Math.min(-6, u.z));
+        if (charging) {
+          u.x = Math.max(-12, Math.min(12, u.x)); u.z = Math.max(-26, Math.min(1, u.z));
+          // anything it runs into gets bumped (spins and wobbles, never capsizes)
+          for (var bk = 0; bk < krathongs.length; bk++) {
+            var kk = krathongs[bk], kd = kk.userData;
+            var bx = kk.position.x - u.x, bz = kk.position.z - u.z;
+            if (bx * bx + bz * bz < 2.4 && now - (kd.bumpAt || -9) > 1.2) {
+              kd.bumpAt = now; dogInfo.bumps++;
+              bumpKrathong(kk, u.x, u.z, 1);
+              spray(kk.position.x, wave(kk.position.x, kk.position.z, now) + 0.3, kk.position.z, 10, 1.8, 2.6);
+              if (sfx) sfx.launch(false);
+              if (kk === u.victim) { u.hits++; pickVictim(); }
+            }
+          }
+          u.rip -= dt;
+          if (u.rip <= 0) { ripple(u.x, u.z, 2.4); spray(u.x, wave(u.x, u.z, now) + 0.1, u.z, 3, 1.2, 1.2); u.rip = 0.25; }
+          u.earFlick = Math.max(u.earFlick, 0.6);
+        } else {
+          u.x = Math.max(-10, Math.min(10, u.x)); u.z = Math.max(-16, Math.min(-6, u.z));
+        }
+        dogInfo.state = u.state;
+        u.rage += ((charging ? 1 : 0) - u.rage) * Math.min(1, dt * 4);
+        rageEyes.forEach(function (e) { e.material.opacity = u.rage * (0.75 + 0.25 * Math.sin(now * 18)); });
 
         // how deep it sits, head pitch, roll
         var k = u.state === 'dive' ? 2.4 : u.state === 'emerge' ? 3.2 : 1.3;
@@ -2272,7 +2331,7 @@
         g.position.set(u.x, wy + u.off + Math.sin(now * 1.3) * 0.04, u.z);
         g.rotation.y = u.heading;
         body.rotation.x = u.pitch;
-        body.rotation.z = Math.sin(now * 0.8) * 0.05;
+        body.rotation.z = Math.sin(now * (charging ? 9 : 0.8)) * (charging ? 0.12 : 0.05);
         g.visible = u.state !== 'under';
 
         // yawn: jaw opens wide and closes
@@ -2668,6 +2727,15 @@
         k.rotation.x = (wave(x, z + 0.6, t) - wave(x, z - 0.6, t)) * 0.9;
         k.rotation.z = -(wave(x + 0.6, z, t) - wave(x - 0.6, z, t)) * 0.9;
         k.rotation.y += d.spin * dt;
+        if (d.wob > 0.002 || Math.abs(d.bspin || 0) > 0.01 || Math.abs(d.pvx || 0) + Math.abs(d.pvz || 0) > 0.01) {   // settling after a bump
+          d.wobT += dt;
+          var wt = d.wob * Math.sin(d.wobT * 9);
+          k.rotation.x += Math.cos(d.wobAx) * wt; k.rotation.z += Math.sin(d.wobAx) * wt;
+          d.wob *= Math.exp(-dt * 1.6);
+          k.rotation.y += d.bspin * dt; d.bspin *= Math.exp(-dt * 1.4);
+          k.position.x += d.pvx * dt; k.position.z += d.pvz * dt;
+          d.pvx *= Math.exp(-dt * 1.8); d.pvz *= Math.exp(-dt * 1.8);
+        }
         if (d.pop < 1) { d.pop = Math.min(1, d.pop + dt * 1.1); k.scale.setScalar(d.scale * Math.max(0.001, elastic(d.pop))); }
         var fl = 1 + 0.16 * Math.sin(t * 13 + d.ph) + 0.08 * Math.sin(t * 7.3 + d.ph * 2);
         d.flame.scale.set(1.1 * fl, 1.25 * fl, 1);
@@ -2940,7 +3008,8 @@
       },
       stats: function () {
         return { tier: tier, gpu: env.gpu || '', pixelRatio: PR, bloom: !!composer, fpsCap: perf.cap || null, fps: Math.round(1000 / perf.ema),
-          worstFrameMs: Math.round(perf.worst), hitches: +perf.spikes.toFixed(1), degradeSteps: perf.step, drawCalls: renderer.info.render.calls };
+          worstFrameMs: Math.round(perf.worst), hitches: +perf.spikes.toFixed(1), degradeSteps: perf.step, drawCalls: renderer.info.render.calls,
+          dog: { state: dogInfo.state, charges: dogInfo.charges, bumps: dogInfo.bumps } };
       },
       resize: resize,
       launchAt: launchAt,
