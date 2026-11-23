@@ -340,6 +340,7 @@
     '.lk-mine{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}',
     '.lk-egg .lk-btn-gallery{background:linear-gradient(#b9a4ff,#7a5ad8);color:#fff;box-shadow:0 4px 0 #4a2f9a,0 10px 24px rgba(0,0,0,.35);text-shadow:0 1px 2px rgba(0,0,0,.35)}',
     '.lk-making .lk-toast{top:30%}',
+    '.lk-making canvas{touch-action:none}',
     '.lk-egg .lk-toast{z-index:30}',
     '.lk-making .lk-bottom,.lk-making .lk-bottom *,.lk-making .lk-title,.lk-making .lk-labels,.lk-making .lk-close,.lk-making .lk-sound{opacity:0;pointer-events:none!important;transition:opacity .3s}',
     '.lk-btn:focus-visible,.lk-close:focus-visible{outline:3px solid #7bdff2;outline-offset:3px}',
@@ -1794,9 +1795,12 @@
         if (!st8.active || slice) return;
         setNdc(e);
         if (st8.mode === 'cut') { st8.drag = { cut: true }; moveKnife(e); return; }
-        var idx = st8.tool || st8.view ? -1 : pickItem();
-        st8.drag = { x: e.clientX, y: e.clientY, idx: idx, moved: false, yaw: st8.yaw };
-        if (idx >= 0) { st8.sel = idx; updateRing(); if (st8.hooks.select) st8.hooks.select(idx); }
+        var hit = st8.tool || st8.view ? -1 : pickItem();
+        // an item already selected moves wherever you drag on the table, so you never have to hit it exactly;
+        // with nothing selected, a drag spins the krathong
+        var idx = hit >= 0 ? hit : st8.tool || st8.view ? -1 : st8.sel;
+        st8.drag = { x: e.clientX, y: e.clientY, idx: idx, hit: hit, moved: false, yaw: st8.yaw, from: null, start: null };
+        if (hit >= 0) { st8.sel = hit; updateRing(); if (st8.hooks.select) st8.hooks.select(hit); }
         try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* old browser */ }
       }
       function move(e) {
@@ -1813,9 +1817,12 @@
             var wpos = st8.k.localToWorld(tmpV.set(it.p[0], it.p[1], it.p[2]));
             var hitP = new THREE.Vector3();
             if (ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -wpos.y), hitP)) {
-              var lp = st8.k.worldToLocal(hitP), rr = Math.sqrt(lp.x * lp.x + lp.z * lp.z);
-              if (rr > 1.8) { lp.x *= 1.8 / rr; lp.z *= 1.8 / rr; }   // stay on (or just over the edge of) the krathong
-              it.p = [Math.round(lp.x * 100) / 100, it.p[1], Math.round(lp.z * 100) / 100];
+              var lp = st8.k.worldToLocal(hitP);
+              // move by how far the finger moved (no jump to the finger)
+              if (!dr.from) { dr.from = lp.clone(); dr.start = [it.p[0], it.p[2]]; }
+              var nx = dr.start[0] + lp.x - dr.from.x, nz = dr.start[1] + lp.z - dr.from.z, rr = Math.sqrt(nx * nx + nz * nz);
+              if (rr > 1.8) { nx *= 1.8 / rr; nz *= 1.8 / rr; }   // stay on (or just over the edge of) the krathong
+              it.p = [Math.round(nx * 100) / 100, it.p[1], Math.round(nz * 100) / 100];
               o.position.set(it.p[0], it.p[1], it.p[2]); updateRing();
             }
           }
@@ -1828,7 +1835,8 @@
         var dr = st8.drag; st8.drag = null;
         if (!dr) return;
         if (dr.cut) { doCut(); return; }
-        if (dr.idx >= 0) { if (dr.moved && st8.hooks.change) st8.hooks.change(); return; }
+        if (dr.idx >= 0 && dr.moved) { if (st8.hooks.change) st8.hooks.change(); return; }
+        if (dr.hit >= 0) return;   // a tap on an item: it is selected
         if (dr.moved || st8.view) return;
         // a tap: place the chosen thing here, or deselect
         setNdc(e);
@@ -1884,7 +1892,7 @@
         tmpV.set(tx, ty, tz);
         cam.lookAt(tmpV);
         stage.rotation.y += ((st8.drag && st8.drag.idx < 0 ? st8.yaw : st8.yaw) - stage.rotation.y) * Math.min(1, dt * 8);
-        if (!st8.drag && !cutting) st8.yaw += dt * 0.05;   // a gentle turntable
+        if (!st8.drag && !cutting && st8.sel < 0) st8.yaw += dt * 0.05;   // a gentle turntable (holds still while you work on an item)
         knife.visible = cutting && !slice;
         knife.position.set(st8.knifeX, trunk.position.y + 1.05 + Math.abs(Math.sin(st8.t * 3)) * 0.08, trunk.position.z);
         cutRing.visible = knife.visible; cutRing.position.set(st8.knifeX, trunk.position.y, trunk.position.z);
