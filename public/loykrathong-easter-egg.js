@@ -39,13 +39,13 @@
     // คำอธิษฐานของผู้ใช้อื่น: URL ของ API (GET ?limit=N คืน [{name, wish}], POST {name, wish})
     // หรือ object { load: function (limit) -> Promise<[{name, wish}]>, save: function ({name, wish}) -> Promise }
     wishFeed: null,
-    wishFeedEvery: [6000, 10000],  // สุ่มลอยคำอธิษฐานของคนอื่นทุกกี่ ms
+    wishFeedEvery: null,    // null = ตามจำนวนคำอธิษฐาน (น้อย = ห่าง), หรือกำหนดเอง เช่น [6000, 10000] ms
     wishPollMs: null,       // ถาม API หากระทงใหม่ทุกกี่ ms (null = อัตโนมัติ: จอใหญ่ 3 วิ, ทั่วไป 12 วิ, ไม่มีคนแตะ 5 นาที 30 วิ)
     onFeed: null,           // function ({ count }) ทุกครั้งที่ดึง feed สำเร็จ (ใช้กับตัวนับบนจอใหญ่)
     screen: false,          // โหมดจอใหญ่: ไม่มีช่องพิมพ์/ปุ่มปิด, ลอยกระทงใหม่ของทุกคน
     photos: true,           // แสดงรูปที่คนแนบมากับกระทง (false = ซ่อนรูปของทุกคนบนจอนี้)
     workshop: true,         // ปุ่ม "ทำกระทงของฉัน" (ต้องโหลด design.js และ workshop.js ก่อนไฟล์นี้)
-    wishReturnChance: 0.6,  // โอกาสที่กระทง+คำอธิษฐานที่ลอยหายไปแล้วจะสุ่มลอยกลับมาอีก (0–1, ลดลงทุกรอบ)
+    wishReturnChance: 0.35, // โอกาสที่กระทงของเราเองที่ลอยหายไปแล้วจะลอยกลับมาอีก 1 รอบ (0–1) ของคนอื่นวนกลับมาจาก feed เอง
     demo: false,            // โหมดเดโม: เล่นอัตโนมัติ (ลอยกระทง+คำอธิษฐานตัวอย่าง) ไม่สนวันที่/ไม่บันทึกว่าเคยดู
     onClose: null,
     onReady: null,          // function ({ moonScreen }) once the 3D scene shows (landing page moon hand-over)
@@ -225,6 +225,24 @@
     fresh.reverse();   // API order is newest first
     if (fresh.length > FRESH_MAX) fresh = fresh.slice(fresh.length - FRESH_MAX);
     return { fresh: fresh, pool: pool };
+  }
+
+  // Which earlier wish to float again: none shown within cooldownMs, none still on screen, the one shown longest ago.
+  // shown: { key: time last floated }, onScreen: { key: 1 }
+  function feedKey(e) { return e.id || e.name + '|' + e.wish; }
+  function pickReplay(pool, shown, now, onScreen, cooldownMs) {
+    var best = null, bestAt = Infinity;
+    for (var i = 0; i < (pool || []).length; i++) {
+      var k = feedKey(pool[i]), at = shown[k] == null ? -Infinity : shown[k];
+      if (onScreen[k] || now - at < cooldownMs) continue;
+      if (at < bestAt || (at === bestAt && Math.random() < 0.5)) { best = pool[i]; bestAt = at; }
+    }
+    return best;
+  }
+  // gap between replays: few wishes -> slow (a lone wish should not loop), many -> livelier
+  function replayGap(n) {
+    var ln = Math.log(Math.max(0, n) + 1);
+    return Math.round(Math.max(6, Math.min(20, 22 - 3.4 * ln)) * 1000);
   }
 
   // folder this script was loaded from (to find semed-logo.png next to it)
@@ -1508,10 +1526,14 @@
         else if (o.isSprite) o.material.dispose();
       });
     }
-    // the workshop restyles the big krathong at the front while you build
+    // the opening krathong (your selected one, if any) starts up front and drifts away downriver like the others;
+    // changing your krathong restyles it only while it is still on its way
+    var heroGone = false;
     function setHeroLook(look) {
+      if (heroGone || krathongs.indexOf(hero) < 0) return;
       var old = hero, k = makeKrathong(0, look);
       k.userData.variant = 0; k.userData.hero = true; k.userData.scale = old.userData.scale; k.userData.pop = 1;
+      k.userData.vz = old.userData.vz; k.userData.vx = old.userData.vx;
       k.position.copy(old.position); k.rotation.copy(old.rotation); k.scale.copy(old.scale);
       if (heroLight) { old.remove(heroLight); k.add(heroLight); }
       scene.add(k);
@@ -1829,6 +1851,7 @@
 
     var hero = addKrathong(0.6, 6.2, 1.15, 0, false);
     hero.userData.hero = true;
+    hero.userData.vz = -0.55; hero.userData.vx = 0.03;
     // a real point light costs every lit pixel; low tier relies on the glow sprites instead
     var heroLight = LOW ? null : new THREE.PointLight(0xffa040, 0.8, 6, 2);
     if (heroLight) { heroLight.position.set(0, 1.6, 0); hero.add(heroLight); }
@@ -2657,7 +2680,6 @@
       for (var i = krathongs.length - 1; i >= 0; i--) {
         var k = krathongs[i], d = k.userData;
         k.position.x += d.vx * dt; k.position.z += d.vz * dt;
-        if (d.hero) { k.position.x = 0.6 + Math.sin(t * 0.3) * 0.5; k.position.z = 6.2 + Math.sin(t * 0.2) * 0.4; }
         var x = k.position.x, z = k.position.z;
         k.position.y = wave(x, z, t) + 0.02;
         k.rotation.x = (wave(x, z + 0.6, t) - wave(x, z - 0.6, t)) * 0.9;
@@ -2688,10 +2710,11 @@
           frameCards.push({ d: d, sx: sx, sy: sy, rawSy: sy, sc: lsc, op: lop });
         }
         if (z < -58) {
+          if (d.hero) { heroGone = true; disposeKrathong(k); krathongs.splice(i, 1); continue; }   // floats away for good
           if (d.user) {
             var wi = d.wishInfo;
-            if (wi && R() < wi.chance) {   // it may drift back into view later
-              returnQueue.push({ at: t + 6 + R() * 14, info: { name: wi.name, wish: wi.wish, other: wi.other, variant: d.variant, design: wi.design, photo: wi.photo, chance: wi.chance * 0.7, returning: true } });
+            if (wi && !wi.other && R() < wi.chance) {   // your own may drift back into view once (others come back via the feed)
+              returnQueue.push({ at: t + 6 + R() * 14, info: { name: wi.name, wish: wi.wish, other: wi.other, variant: d.variant, design: wi.design, photo: wi.photo, chance: 0, returning: true } });
             }
             disposeKrathong(k); krathongs.splice(i, 1); continue;
           }
@@ -2798,7 +2821,7 @@
       for (var si = 0; si < SP; si++) {
         var sd = spData[si]; sd.y += sd.sp * dt; if (sd.y > 3) sd.y = 0;
         var aa = sd.a + t * 0.3;
-        spPos[si * 3] = hero.position.x + Math.cos(aa) * sd.r; spPos[si * 3 + 1] = 0.3 + sd.y; spPos[si * 3 + 2] = hero.position.z + Math.sin(aa) * sd.r;
+        spPos[si * 3] = hero.position.x + Math.cos(aa) * sd.r; spPos[si * 3 + 1] = heroGone ? -100 : 0.3 + sd.y; spPos[si * 3 + 2] = hero.position.z + Math.sin(aa) * sd.r;
       }
       sparkGeo.attributes.position.needsUpdate = true;
 
@@ -2825,7 +2848,7 @@
     // other = a wish from another user: appears a little further out, blue card, no heart firework
     // returning = a wish that floated away and drifts back in (same look, no firework/chime)
     var returnQueue = [];
-    var RETURN_CHANCE = env.returnChance == null ? 0.6 : Math.max(0, Math.min(1, env.returnChance));
+    var RETURN_CHANCE = env.returnChance == null ? 0.35 : Math.max(0, Math.min(1, env.returnChance));
     function launchFront(info) {
       var other = !!(info && info.other), returning = !!(info && info.returning);
       var variant = info && info.variant != null ? info.variant : null;
@@ -2842,6 +2865,7 @@
       if (sfx) sfx.launch(!!(info && info.wish) && !other && !returning);
       if (info && info.wish && labelLayer) {
         var el = document.createElement('div'); el.className = other ? 'lk-label lk-label--other' : 'lk-label';
+        if (info.key) el.dataset.key = info.key;
         var card = document.createElement('div'); card.className = 'lk-label-card';
         var nm = document.createElement('span'); nm.className = 'lk-label-name'; nm.textContent = info.name;
         var ws = document.createElement('span'); ws.className = 'lk-label-wish'; ws.textContent = info.wish;
@@ -3387,13 +3411,30 @@
     // other users' wishes: poll the feed; wishes nobody has floated here yet go first (a few seconds apart),
     // otherwise float a random earlier wish every wishFeedEvery ms
     var feed = opts.demo ? null : makeFeed(opts.wishFeed);
-    var feedState = { seen: {}, mine: {} }, freshQueue = [], pool = [], feedTimer = null, pollTimer = null, firstFetch = true;
+    // ids of wishes sent from this browser: kept across reloads so your own never come back to you as "others"
+    var MINE_KEY = 'lk-mine', mineIds = {};
+    try { (JSON.parse(safeGet(MINE_KEY) || '[]') || []).forEach(function (id) { mineIds[id] = 1; }); } catch (e) { /* ignore */ }
+    function rememberMine(id) {
+      mineIds[id] = 1;
+      try { safeSet(MINE_KEY, JSON.stringify(Object.keys(mineIds).slice(-100))); } catch (e) { /* ignore */ }
+    }
+    var feedState = { seen: {}, mine: mineIds }, freshQueue = [], pool = [], feedTimer = null, pollTimer = null, firstFetch = true;
+    var shownAt = {}, REPLAY_COOLDOWN = 90000;   // a wish floats again at most once every 90 s on this screen
+    function onScreenKeys() {
+      var o = {};
+      labelsLayer.querySelectorAll('.lk-label--other').forEach(function (el) { if (el.dataset.key) o[el.dataset.key] = 1; });
+      return o;
+    }
     var lastInput = Date.now();   // polling slows down when nobody has touched the page for a while
     root.addEventListener("pointerdown", function () { lastInput = Date.now(); }, true);
     root.addEventListener("keydown", function () { lastInput = Date.now(); }, true);
     var freshGap = opts.screen ? 1500 : 2500, lastFloat = 0, nextRandomAt = 0;
     if (feed && !opts.screen) root.querySelector('.lk-share-note').hidden = false;
-    function randomGap() { var lo = opts.wishFeedEvery[0], hi = opts.wishFeedEvery[1]; return lo + Math.random() * Math.max(0, hi - lo); }
+    function randomGap() {
+      var every = opts.wishFeedEvery;
+      if (every) return every[0] + Math.random() * Math.max(0, every[1] - every[0]);
+      return replayGap(pool.length) * (0.8 + Math.random() * 0.4);
+    }
     function feedFetch() {
       Promise.resolve(feed.load(50)).then(function (d) {
         var m = mergeFeed(feedState, d && d.wishes);
@@ -3424,7 +3465,8 @@
       return lookCache[id];
     }
     function floatWish(e) {
-      var info = { name: e.name || 'เพื่อนในระบบ', wish: e.wish, other: true };
+      shownAt[feedKey(e)] = Date.now();
+      var info = { name: e.name || 'เพื่อนในระบบ', wish: e.wish, other: true, key: feedKey(e) };
       if (!e.look) { scene.launchFront(info); return; }
       fetchLook(e.id).then(function (l) {
         if (closed || !scene) return;
@@ -3513,7 +3555,9 @@
         if (freshQueue.length && now - lastFloat >= freshGap) {
           floatWish(freshQueue.shift()); lastFloat = now; nextRandomAt = now + randomGap();
         } else if (!freshQueue.length && pool.length && now >= nextRandomAt) {
-          floatWish(pool[Math.floor(Math.random() * pool.length)]); lastFloat = now; nextRandomAt = now + randomGap();
+          var again = pickReplay(pool, shownAt, now, onScreenKeys(), REPLAY_COOLDOWN);
+          if (again) { floatWish(again); lastFloat = now; }
+          nextRandomAt = now + randomGap();
         }
       }
       feedTimer = setTimeout(feedLoop, 500);
@@ -3593,7 +3637,7 @@
         Promise.resolve(feed.save({ name: shownName, wish: wish, design: look.design && DZ ? DZ.sanitize(look.design) : null, photo: look.photo || null, kid: floatKid })).then(function (r) {
           if (closed || !r) return;
           if (r.ok) {
-            if (r.id) feedState.mine[r.id] = 1;
+            if (r.id) rememberMine(r.id);
             if (floatKid && shelf) { shelf.markFloated(floatKid); renderMine(); }
             setTimeout(function () { if (!closed) toast(floatKid ? '🪷 กระทงของคุณลอยไปให้ทุกคนเห็นแล้ว ดูได้ใน 🏛 กระทงทุกคน' : MSG_SHARED); }, 1800);
           }
@@ -3683,6 +3727,6 @@
     festivalDate: function (year) { return festivalDate(year || new Date().getFullYear()); },
     preload: preload,
     // exposed for tests
-    _mergeFeed: mergeFeed, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
+    _mergeFeed: mergeFeed, _pickReplay: pickReplay, _replayGap: replayGap, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
   };
 })(window);
