@@ -128,3 +128,10 @@ test('shake detector: a drag counts one shake each time it swings back after tra
   assert.equal(run([2, -2, 2, -2]), 0);                    // jitter does not count
   assert.equal(run([8, 8, -8, -8, 8, 8]), 2);              // back, then forth again: two shakes
 });
+
+test('luckyNumbers: a 2-digit and a 3-digit number, zero-padded', () => {
+  assert.deepEqual(JSON.parse(JSON.stringify(eggF._luckyNumbers(() => 0))), { two: '00', three: '000' });
+  assert.deepEqual(JSON.parse(JSON.stringify(eggF._luckyNumbers(() => 0.999))), { two: '99', three: '999' });
+  const seq = [0.07, 0.042]; let k = 0;
+  assert.deepEqual(JSON.parse(JSON.stringify(eggF._luckyNumbers(() => seq[k++]))), { two: '07', three: '042' });
+});

@@ -265,6 +265,12 @@
       return hit;
     };
   }
+  // "เลขเด็ด" on the slip, just for fun: a 2-digit and a 3-digit number
+  function luckyNumbers(rnd) {
+    rnd = rnd || Math.random;
+    function pad(n, w) { n = String(n); while (n.length < w) n = '0' + n; return n; }
+    return { two: pad(Math.min(99, Math.floor(rnd() * 100)), 2), three: pad(Math.min(999, Math.floor(rnd() * 1000)), 3) };
+  }
   function pickFortune(prev, rnd) {
     var n = FORTUNES.length, i = Math.floor((rnd || Math.random)() * (n - 1));
     if (prev >= 0 && prev < n && i >= prev) i++;   // skip the slip drawn last time
@@ -391,6 +397,12 @@
     '.lk-slip-rank{display:inline-block;margin:2px 0 10px;padding:2px 14px;border-radius:999px;background:#c4302b;color:#fff6d6;font-size:14px}',
     '.lk-slip-text{font-size:18px;line-height:1.55;margin:0 0 14px}',
     '.lk-slip-note{font-size:12px;color:#8a5a3a;margin:0 0 12px;min-height:1em}',
+    '.lk-lucky{margin:0 0 12px;padding:10px 8px 8px;border-radius:12px;background:#fff7e0;border:1.5px dashed #c4302b}',
+    '.lk-lucky-head{font-size:13px;color:#a3412f;margin-bottom:6px}',
+    '.lk-lucky-row{display:flex;justify-content:center;gap:16px}',
+    '.lk-lucky-row div{display:flex;flex-direction:column;align-items:center;font-size:11px;color:#8a5a3a}',
+    '.lk-lucky-row b{font-size:30px;line-height:1.1;font-weight:600;letter-spacing:3px;color:#c4302b;text-shadow:0 1px 0 #f6c344}',
+    '.lk-lucky-fine{font-size:10.5px;color:#a07a5a;margin-top:4px}',
     '.lk-egg .lk-slip-ok{font:inherit;font-size:16px;font-weight:500;cursor:pointer;border:0;border-radius:999px;padding:9px 26px;background:linear-gradient(#fff0a0,#ffc94a 55%,#ff9f2e);color:#4a1f6b;box-shadow:0 4px 0 #b85c10}',
     '.lk-egg .lk-slip-ok:focus-visible{outline:3px solid #7bdff2;outline-offset:3px}',
     '.lk-cupbox{position:relative;width:min(84vw,320px);padding:20px 20px 16px;border-radius:22px;text-align:center;color:#fff6d6;background:rgba(36,14,70,.92);border:1.5px solid rgba(255,226,122,.55);box-shadow:0 24px 60px rgba(0,0,0,.55);animation:lk-fade .3s both}',
@@ -3972,12 +3984,18 @@
       // 2) the slip
       function showSlip() {
         box.innerHTML = '<div class="lk-slip"><div class="lk-slip-head">🎴 เซียมซีลอยกระทง</div><div class="lk-slip-no"></div>' +
-        '<span class="lk-slip-rank"></span><p class="lk-slip-text"></p><p class="lk-slip-note"></p>' +
+        '<span class="lk-slip-rank"></span><p class="lk-slip-text"></p>' +
+          '<div class="lk-lucky"><div class="lk-lucky-head">🔢 เลขเด็ดประจำใบ คัดมาแล้วจากกระบอกเซียมซี</div>' +
+          '<div class="lk-lucky-row"><div><b class="lk-two"></b>2 ตัว</div><div><b class="lk-three"></b>3 ตัว</div></div>' +
+          '<div class="lk-lucky-fine">เพื่อความบันเทิง ซื้อเท่าที่ไหว 😆</div></div><p class="lk-slip-note"></p>' +
         '<button type="button" class="lk-slip-ok">สาธุ 🙏</button></div>';
         box.setAttribute('aria-label', 'ใบเซียมซี');
         box.querySelector('.lk-slip-no').textContent = 'ใบที่ ' + (i + 1);
         box.querySelector('.lk-slip-rank').textContent = ft.rank;
         box.querySelector('.lk-slip-text').textContent = ft.text;
+        var lucky = luckyNumbers();
+        box.querySelector('.lk-two').textContent = lucky.two;
+        box.querySelector('.lk-three').textContent = lucky.three;
         var note = fortuneNote; fortuneNote = box.querySelector('.lk-slip-note');
         if (note && note.textContent) fortuneNote.textContent = note.textContent;   // the "shared" note may have come in already
         setTimeout(function () { var b = box.querySelector('.lk-slip-ok'); if (b && box.parentNode) b.focus({ preventScroll: true }); }, 400);
@@ -4105,6 +4123,6 @@
     festivalDate: function (year) { return festivalDate(year || new Date().getFullYear()); },
     preload: preload,
     // exposed for tests
-    _mergeFeed: mergeFeed, _pickFortune: pickFortune, _shakeDetector: shakeDetector, _FORTUNES: FORTUNES, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
+    _mergeFeed: mergeFeed, _pickFortune: pickFortune, _shakeDetector: shakeDetector, _luckyNumbers: luckyNumbers, _FORTUNES: FORTUNES, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
   };
 })(window);
