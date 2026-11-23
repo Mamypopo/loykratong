@@ -47,6 +47,7 @@
     wishReturnChance: 0,    // โอกาสที่กระทงของเราเองที่ลอยหายไปแล้วจะลอยกลับมาอีก 1 รอบ (0 = ลอยครั้งเดียวแล้วหายไป)
     demo: false,            // โหมดเดโม: เล่นอัตโนมัติ (ลอยกระทง+คำอธิษฐานตัวอย่าง) ไม่สนวันที่/ไม่บันทึกว่าเคยดู
     onClose: null,
+    fortune: true,          // ใบเซียมซีหลังลอยกระทง
     onReady: null,          // function ({ moonScreen }) once the 3D scene shows (landing page moon hand-over)
     container: null
   };
@@ -228,6 +229,37 @@
 
   function feedKey(e) { return e.id || e.name + '|' + e.wish; }
 
+  // เซียมซี after floating: office-flavoured, all good news
+  var FORTUNES = [
+    { rank: 'ปัง', text: 'ปีหน้าโบนัสมาเต็ม แต่ระวังประชุมยาวนิดนึง' },
+    { rank: 'เฮง', text: 'งานที่ค้างอยู่จะเสร็จทันเดดไลน์ (แบบหวุดหวิดแต่ทัน)' },
+    { rank: 'ดีมาก', text: 'จะได้กินข้าวฟรีจากหัวหน้าอย่างน้อย 1 มื้อ' },
+    { rank: 'ปาฏิหาริย์', text: 'อีเมลที่ส่งไปจะได้คำตอบภายในวันเดียว' },
+    { rank: 'เฮง', text: 'Wi-Fi จะแรงที่สุดในวันที่ต้องพรีเซนต์' },
+    { rank: 'อิ่มบุญ', text: 'จะมีคนเอาขนมมาแจกที่โต๊ะบ่อยขึ้น' },
+    { rank: 'ดีเลิศ', text: 'ปีนี้ได้ลาพักร้อนครบทุกวัน ไม่มีงานด่วนตามมา' },
+    { rank: 'ราบรื่น', text: 'ปริ้นเตอร์จะไม่กระดาษติดในวันที่รีบ' },
+    { rank: 'ปัง', text: 'จะมีคนชมงานของคุณต่อหน้าหัวหน้า' },
+    { rank: 'แข็งแรง', text: 'สุขภาพดี ขึ้นบันไดสามชั้นไม่หอบ' },
+    { rank: 'เฮง', text: 'เจอที่จอดรถว่างทุกเช้า' },
+    { rank: 'ปาฏิหาริย์', text: 'ประชุมที่ควรเป็นอีเมล จะกลายเป็นอีเมลจริงๆ' },
+    { rank: 'สงบสุข', text: 'ไลน์กลุ่มงานจะเงียบในวันหยุด' },
+    { rank: 'โชคดี', text: 'มีเกณฑ์ได้ของรางวัลใหญ่ในงานจับฉลาก' },
+    { rank: 'ดีมาก', text: 'กาแฟแก้วต่อไปจะอร่อยเป็นพิเศษ' },
+    { rank: 'รุ่ง', text: 'งานใหม่ที่ได้รับจะท้าทาย แต่คุณจะทำได้ดีเกินคาด' },
+    { rank: 'เสน่ห์แรง', text: 'จะได้เพื่อนใหม่ต่างแผนกที่คุยถูกคอ' },
+    { rank: 'ราบรื่น', text: 'คอมจะไม่อัปเดตเองตอนกำลังทำงานสำคัญ' },
+    { rank: 'การเงินดี', text: 'เงินเดือนออกแล้วยังเหลือถึงสิ้นเดือน' },
+    { rank: 'อิ่มใจ', text: 'รอยยิ้มของคุณจะทำให้วันของใครสักคนดีขึ้น' },
+    { rank: 'อบอุ่น', text: 'ได้กลับบ้านเร็วไปกินข้าวกับคนที่รักบ่อยขึ้น' },
+    { rank: 'สมหวัง', text: 'สิ่งที่อธิษฐานไว้วันนี้ คืบหน้าไปครึ่งทางแล้ว' }
+  ];
+  function pickFortune(prev, rnd) {
+    var n = FORTUNES.length, i = Math.floor((rnd || Math.random)() * (n - 1));
+    if (prev >= 0 && prev < n && i >= prev) i++;   // skip the slip drawn last time
+    return Math.min(n - 1, i);
+  }
+
   // folder this script was loaded from (to find semed-logo.png next to it)
   var SCRIPT_BASE = (function () {
     try { var s = document.currentScript && document.currentScript.src; return s ? s.slice(0, s.lastIndexOf('/') + 1) : ''; } catch (e) { return ''; }
@@ -341,6 +373,17 @@
     '.lk-egg .lk-btn-gallery{background:linear-gradient(#b9a4ff,#7a5ad8);color:#fff;box-shadow:0 4px 0 #4a2f9a,0 10px 24px rgba(0,0,0,.35);text-shadow:0 1px 2px rgba(0,0,0,.35)}',
     '.lk-making .lk-toast{top:30%}',
     '.lk-making canvas{touch-action:none}',
+    '.lk-fortune{position:absolute;inset:0;z-index:40;display:grid;place-items:center;background:rgba(10,4,30,.45);pointer-events:auto;animation:lk-fade .3s both}',
+    '.lk-slip{position:relative;width:min(84vw,340px);padding:22px 22px 18px;border-radius:14px;text-align:center;color:#5a1a12;background:linear-gradient(#fffaf0,#fff1d6);border:3px solid #c4302b;box-shadow:0 0 0 6px #f6c344,0 0 0 8px #c4302b,0 24px 60px rgba(0,0,0,.55);animation:lk-slip-in .7s cubic-bezier(.2,1.4,.4,1) both}',
+    '.lk-slip-head{position:relative;z-index:1;font-size:13px;letter-spacing:.5px;color:#a3412f}',
+    '.lk-slip-no{margin-top:.45em;font-family:"Charmonman","Mitr",serif;font-weight:700;font-size:54px;line-height:1.1;color:#c4302b}',
+    '.lk-slip-rank{display:inline-block;margin:2px 0 10px;padding:2px 14px;border-radius:999px;background:#c4302b;color:#fff6d6;font-size:14px}',
+    '.lk-slip-text{font-size:18px;line-height:1.55;margin:0 0 14px}',
+    '.lk-slip-note{font-size:12px;color:#8a5a3a;margin:0 0 12px;min-height:1em}',
+    '.lk-egg .lk-slip-ok{font:inherit;font-size:16px;font-weight:500;cursor:pointer;border:0;border-radius:999px;padding:9px 26px;background:linear-gradient(#fff0a0,#ffc94a 55%,#ff9f2e);color:#4a1f6b;box-shadow:0 4px 0 #b85c10}',
+    '.lk-egg .lk-slip-ok:focus-visible{outline:3px solid #7bdff2;outline-offset:3px}',
+    '@keyframes lk-slip-in{0%{opacity:0;transform:translateY(-60px) rotate(-8deg)}60%{opacity:1;transform:translateY(6px) rotate(3deg)}80%{transform:rotate(-2deg)}100%{transform:none}}',
+    '@media (prefers-reduced-motion:reduce){.lk-slip{animation:lk-fade .3s both}}',
     '.lk-egg .lk-toast{z-index:30}',
     '.lk-making .lk-bottom,.lk-making .lk-bottom *,.lk-making .lk-title,.lk-making .lk-labels,.lk-making .lk-close,.lk-making .lk-sound{opacity:0;pointer-events:none!important;transition:opacity .3s}',
     '.lk-btn:focus-visible,.lk-close:focus-visible{outline:3px solid #7bdff2;outline-offset:3px}',
@@ -3816,6 +3859,30 @@
       }, 850);
     }
 
+    // เซียมซี: a slip drops in after you float; the "shared with everyone" note lands on it
+    var FORTUNE_KEY = 'lk-fortune', fortuneNote = null;
+    function showFortune() {
+      if (closed || !opts.fortune || opts.screen || opts.demo) return;
+      var prev = parseInt(safeGet(FORTUNE_KEY), 10), i = pickFortune(isNaN(prev) ? -1 : prev);
+      safeSet(FORTUNE_KEY, String(i));
+      var ft = FORTUNES[i];
+      var box = document.createElement('div'); box.className = 'lk-fortune';
+      box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'ใบเซียมซี');
+      box.innerHTML = '<div class="lk-slip"><div class="lk-slip-head">🎴 เซียมซีลอยกระทง</div><div class="lk-slip-no"></div>' +
+        '<span class="lk-slip-rank"></span><p class="lk-slip-text"></p><p class="lk-slip-note"></p>' +
+        '<button type="button" class="lk-slip-ok">สาธุ 🙏</button></div>';
+      box.querySelector('.lk-slip-no').textContent = 'ใบที่ ' + (i + 1);
+      box.querySelector('.lk-slip-rank').textContent = ft.rank;
+      box.querySelector('.lk-slip-text').textContent = ft.text;
+      fortuneNote = box.querySelector('.lk-slip-note');
+      function shut() { if (box.parentNode) box.parentNode.removeChild(box); fortuneNote = null; document.removeEventListener('keydown', onEsc, true); }
+      function onEsc(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); shut(); } }
+      box.addEventListener('click', function (ev) { if (ev.target === box || ev.target.closest('.lk-slip-ok')) shut(); });
+      document.addEventListener('keydown', onEsc, true);
+      root.appendChild(box);
+      setTimeout(function () { var b = box.querySelector('.lk-slip-ok'); if (b && box.parentNode) b.focus({ preventScroll: true }); }, 400);
+    }
+
     root.querySelector('.lk-wish').addEventListener('submit', function (e) {
       e.preventDefault();
       var input = wishInput;
@@ -3837,7 +3904,9 @@
           if (r.ok) {
             if (r.id) rememberMine(r.id);
             if (floatKid && shelf) { shelf.markFloated(floatKid); renderMine(); }
-            setTimeout(function () { if (!closed) toast(floatKid ? '🪷 กระทงของคุณลอยไปให้ทุกคนเห็นแล้ว ดูได้ใน 🏛 กระทงทุกคน' : MSG_SHARED); }, 1800);
+            var sharedMsg = floatKid ? '🪷 กระทงของคุณลอยไปให้ทุกคนเห็นแล้ว ดูได้ใน 🏛 กระทงทุกคน' : MSG_SHARED;
+            if (opts.fortune) setTimeout(function () { if (fortuneNote) fortuneNote.textContent = sharedMsg; else if (!closed) toast(sharedMsg); }, 1500);
+            else setTimeout(function () { if (!closed) toast(sharedMsg); }, 1800);
           }
           else if (r.status === 422) toast(MSG_BLOCKED);
           else if (r.status === 429) toast(MSG_TOO_FAST);
@@ -3846,6 +3915,7 @@
       }
       if (scene) scene.launchFront({ name: shownName || 'ไม่ระบุชื่อ', wish: wish, design: look.design || null, photo: look.photo || null });
       if (!scene) toast('✨ ' + wish);
+      if (scene) setTimeout(showFortune, 1200);
       input.value = '';
       syncFloat();
     });
@@ -3925,6 +3995,6 @@
     festivalDate: function (year) { return festivalDate(year || new Date().getFullYear()); },
     preload: preload,
     // exposed for tests
-    _mergeFeed: mergeFeed, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
+    _mergeFeed: mergeFeed, _pickFortune: pickFortune, _FORTUNES: FORTUNES, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
   };
 })(window);

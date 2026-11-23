@@ -106,3 +106,17 @@ test('mergeFeed keeps the look flag so friends see the krathong as it was made',
   assert.equal(out.fresh.find((x) => x.id === 'a').look, true);
   assert.equal(out.fresh.find((x) => x.id === 'b').look, false);
 });
+
+const eggF = loadEgg();
+test('pickFortune: a slip number in range, never the same one twice in a row', () => {
+  const n = eggF._FORTUNES.length;
+  assert.ok(n >= 20);
+  for (let prev = -1; prev < n; prev++) {
+    for (const r of [0, 0.5, 0.999]) {
+      const i = eggF._pickFortune(prev, () => r);
+      assert.ok(i >= 0 && i < n);
+      assert.notEqual(i, prev);
+    }
+  }
+  eggF._FORTUNES.forEach((f) => { assert.ok(f.text && f.rank, JSON.stringify(f)); });
+});
