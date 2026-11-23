@@ -187,6 +187,7 @@
   var FRESH_MAX = 30;
   var MSG_BLOCKED = 'ขอคำอธิษฐานที่สุภาพหน่อยนะ 🙏';
   var MSG_TOO_FAST = 'ลอยถี่ไปนิด รอสักครู่นะ';
+  var DEFAULT_WISH = 'ขอให้มีความสุขตลอดปี';
   var MSG_SHARED = '🪷 กระทงของคุณลอยไปให้เพื่อนๆ เห็นแล้ว';
   function mergeFeed(state, list) {
     var fresh = [], pool = [];
@@ -2515,14 +2516,14 @@
 
     // click on water → launch krathong there
     var raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
-    function launchAt(clientX, clientY) {
+    function launchAt(clientX, clientY, look) {
       if (table.active) return false;
       var rect = canvas.getBoundingClientRect();
       ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
       raycaster.setFromCamera(ndc, camera);
       if (!raycaster.ray.intersectPlane(plane, hit)) return false;
       if (hit.z > 9 || hit.z < -40) return false;
-      var k = addKrathong(hit.x, hit.z, 0.85, null, true);
+      var k = addKrathong(hit.x, hit.z, 0.85, null, true, look || null);
       k.userData.user = true;
       if (sfx) sfx.launch(false);
       return true;
@@ -3006,9 +3007,17 @@
     }
     var myLook = opts.screen || opts.demo ? null : loadLook();
     var makeBtn = root.querySelector('.lk-btn-make');
+    var floatBtn = root.querySelector('.lk-btn-float'), hintEl = root.querySelector('.lk-hint'), wishInput = root.querySelector('.lk-wish input');
+    function renderMine() {
+      floatBtn.textContent = myLook ? 'ลอยกระทงของฉัน' : 'ลอยกระทง';
+      hintEl.textContent = myLook
+        ? 'กด ลอยกระทงของฉัน ได้เลย จะพิมพ์คำอธิษฐานก่อนก็ได้ หรือแตะผิวน้ำเพื่อลอยเล่น'
+        : 'แตะบนผิวน้ำเพื่อลอยกระทง หรือพิมพ์คำอธิษฐานด้านล่าง';
+      makeBtn.textContent = myLook ? '✂️ แก้กระทงของฉัน' : '✂️ ทำกระทงของฉัน';
+    }
     if (WS && DZ && opts.workshop && !opts.screen && !opts.demo) {
       makeBtn.hidden = false;
-      if (myLook) makeBtn.textContent = '✂️ แก้กระทงของฉัน';
+      renderMine();
       makeBtn.addEventListener('click', function () {
         if (!scene) return;
         root.classList.add('lk-making');
@@ -3019,9 +3028,9 @@
             if (look !== undefined) {   // undefined = cancelled
               myLook = look;
               try { if (look) safeSet(LOOK_KEY, JSON.stringify(look)); else global.localStorage.removeItem(LOOK_KEY); } catch (e) { /* storage full: keep it for this visit */ }
-              makeBtn.textContent = myLook ? '✂️ แก้กระทงของฉัน' : '✂️ ทำกระทงของฉัน';
-              if (myLook && myLook.photo && !clip(nameInput.value, 40)) toast('ใส่ชื่อด้วยนะ กระทงที่มีรูปต้องมีชื่อเจ้าของ');
-              else if (myLook) toast('✨ พร้อมลอยแล้ว พิมพ์คำอธิษฐานแล้วกด ลอยกระทง');
+              renderMine();
+              if (myLook && myLook.photo && !clip(nameInput.value, 40)) { toast('ใส่ชื่อด้วยนะ กระทงที่มีรูปต้องมีชื่อเจ้าของ'); nameInput.focus({ preventScroll: true }); }
+              else if (myLook) { toast('✨ กระทงของคุณพร้อมลอยแล้ว กด ลอยกระทงของฉัน ได้เลย'); floatBtn.focus({ preventScroll: true }); }
             }
             if (scene) scene.setHeroLook(myLook);
           }
@@ -3074,7 +3083,7 @@
 
     function onResize() { if (scene) scene.resize(); }
     function onKey(e) { if (e.key === 'Escape' && !opts.screen && !root.classList.contains('lk-making')) close(); }
-    function onCanvasClick(e) { if (scene && scene.launchAt(e.clientX, e.clientY)) toast('🪷 ลอยทุกข์ ลอยโศก ไปกับสายน้ำ'); }
+    function onCanvasClick(e) { if (scene && scene.launchAt(e.clientX, e.clientY, myLook)) toast('🪷 ลอยทุกข์ ลอยโศก ไปกับสายน้ำ'); }
 
     function close() {
       if (closed) return; closed = true;
@@ -3099,6 +3108,7 @@
       e.preventDefault();
       var input = this.querySelector('input');
       var wish = clip(input.value, 80);
+      if (!wish && myLook) wish = DEFAULT_WISH;   // your own krathong floats and is shared even without typing a wish
       var shownName = clip(nameInput.value, 40);   // what the person typed (prefilled from the system)
       var filter = global.LoyKrathongFilter;
       if (filter && ((wish && !filter.check(wish).ok) || (shownName && !filter.check(shownName).ok))) {
