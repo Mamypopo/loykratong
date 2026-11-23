@@ -3474,7 +3474,6 @@
       var it = shelf && shelf.selected();
       myLook = it ? it.look : null; myKid = it ? it.kid : null;
       renderMine();
-      if (scene) scene.setHeroLook(myLook);
     }
     function snapshot(look) { return scene && scene.snapshot ? scene.snapshot(look) : Promise.resolve(null); }
     function openWorkshop(kid) {
@@ -3644,7 +3643,6 @@
             }
           });
           if (opts.demo) startDemo();
-          if (myLook) scene.setHeroLook(myLook);   // the selected krathong from the shelf
           startFeed();
         } catch (err) {
           fallback(); return;   // WebGL unavailable: keep the 2D greeting
