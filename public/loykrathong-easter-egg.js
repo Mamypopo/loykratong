@@ -290,6 +290,7 @@
     '.lk-name-edit{opacity:.75;font-size:12px;margin-right:6px}',
     '@media (max-height:500px){.lk-name-row{flex:none;padding-left:10px}.lk-egg .lk-name-input{width:6.5em}.lk-name-row>span:first-child{display:none}}',
     '.lk-screen .lk-bottom,.lk-screen .lk-close{display:none}',
+    '.lk-screen .lk-label-card{max-width:440px;padding:12px 26px 14px;border-radius:22px}.lk-screen .lk-label-name{font-size:clamp(14px,1.25vw,24px)}.lk-screen .lk-label-wish{font-size:clamp(18px,1.75vw,32px)}',
     '.lk-share-note{font-size:11.5px;color:#d9cff7;opacity:.85;text-align:center;margin-top:-4px}',
     '@media (max-height:500px){.lk-share-note{display:none}}',
     '.lk-label{position:absolute;left:0;top:0;transform-origin:50% 100%;will-change:transform,opacity;opacity:0}',
