@@ -1344,7 +1344,6 @@
     // 7) cut-your-own krathong: a slice (banana trunk, bread, coconut, ice, watermelon) as tall as you cut it,
     //    petals in the shape you drew
     function styleCustom(g, set, d) {
-      var tone = DZ.LEAF_TONES[d.leafColor] || DZ.LEAF_TONES[0];
       var pts = d.leaf || DZ.PRESET_LEAVES[0].points;
       var h = d.trunk, bottom = -0.19, top = bottom + h;
       var ms = matSet(d.material);
@@ -1357,11 +1356,17 @@
         base.position.y = bottom + h / 2; g.add(base);
       }
       if (!d.material) { var band = withOutline(new THREE.Mesh(geoCache.band, mats.band)); band.position.y = top - 0.17; g.add(band); }
-      var n = d.petals, big = cutLeafGeo(pts, tone, 1), small = cutLeafGeo(pts, tone, 0.7), leaves = [];
-      petalRing(leaves, big, n, 1.0, top - 0.02, 0.42, 0, false);
-      petalRing(leaves, small, Math.max(4, n - 2), 0.78, top + 0.01, 0.22, Math.PI / n, false);
-      g.add(new THREE.Mesh(merge(leaves), mats.leaf));
-      big.dispose(); small.dispose();
+      var n = d.petals;
+      if (n > 0) {   // 0 = no petals: just the slice and the centre
+        // one colour for all petals, or the rainbow: each petal in turn takes the next colour
+        var tones = DZ.LEAF_TONES[d.leafColor] === null ? DZ.RAINBOW_TONES : [DZ.LEAF_TONES[d.leafColor] || DZ.LEAF_TONES[0]];
+        var bigs = tones.map(function (tn) { return cutLeafGeo(pts, tn, 1); }), smalls = tones.map(function (tn) { return cutLeafGeo(pts, tn, 0.7); });
+        var leaves = [], n2 = Math.max(4, n - 2);
+        for (var pi = 0; pi < n; pi++) petalRing(leaves, bigs[pi % bigs.length], 1, 1.0, top - 0.02, 0.42, pi / n * Math.PI * 2, false);
+        for (var pj = 0; pj < n2; pj++) petalRing(leaves, smalls[(pj + 1) % smalls.length], 1, 0.78, top + 0.01, 0.22, pj / n2 * Math.PI * 2 + Math.PI / n, false);
+        g.add(new THREE.Mesh(merge(leaves), mats.leaf));
+        bigs.concat(smalls).forEach(function (gm) { gm.dispose(); });
+      }
       var dome = withOutline(new THREE.Mesh(geoCache.dome, mats.dome)); dome.position.y = top - 0.01; dome.scale.y = 0.75; g.add(dome);
       return { top: top + 0.46, cx: 0, cz: 0, coins: [[0, top + 0.09, 1.22, 0], [0.27, top + 0.06, 1.19, 0.3]] };
     }

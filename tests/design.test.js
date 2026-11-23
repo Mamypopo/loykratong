@@ -109,3 +109,12 @@ test('material: five things to cut a base from, unknown ones fall back to banana
   assert.equal(D.sanitize({ material: 9 }).material, 0);
   assert.equal(D.sanitize({ material: '2' }).material, 0);
 });
+
+test('petals: more colours and materials than banana leaf, and 0 means no petals at all', () => {
+  assert.ok(D.LEAF_COLORS.length >= 9);
+  assert.equal(D.sanitize({ leafColor: D.LEAF_COLORS.length - 1 }).leafColor, D.LEAF_COLORS.length - 1);
+  assert.equal(D.LEAF_TONES.length, D.LEAF_COLORS.length);
+  assert.equal(D.sanitize({ petals: 0 }).petals, 0);
+  assert.equal(D.sanitize({ petals: 3 }).petals, D.PETALS_MIN);
+  assert.equal(D.sanitize({ petals: -2 }).petals, 0);
+});

@@ -4,7 +4,7 @@
  *     base: 0..6        0-5 ready-made styles, 6 = a slice you cut yourself
  *     material: 0..4    what the slice is cut from: banana trunk, bread, coconut, ice, watermelon (base 6)
  *     trunk: 0.2..0.9   height of the slice you cut (base 6)
- *     leaf, leafColor, petals   petal outline you drew (0..1, y up), its colour, how many around the rim (base 6)
+ *     leaf, leafColor, petals   petal outline you drew (0..1, y up), what the petals are made of, how many (0 = none) (base 6)
  *     flowers: 0..4     flower colours of the ready-made styles
  *     items: [{ k, p: [x,y,z], r, s, d? }]   things stuck on the krathong, in the krathong's own coordinates
  *     doodles: [{ s: [{ c, w, p: [[x,y],...] }] }]   drawings (0..1, y down) shown as paper stickers (item k = doodle, d = index)
@@ -30,8 +30,13 @@
     ['#ffa31a', '#ffc43d', '#ff7f2a'], ['#ff6f9e', '#ffa1c1', '#fff0f5'], ['#ffffff', '#ffe38a', '#c89bff'],
     ['#ff5a5a', '#ffb347', '#fff3d6'], ['#b388ff', '#ff8fd0', '#ffffff']
   ];
-  var LEAF_COLORS = ['ใบตองสด', 'ใบตองอ่อน', 'ใบตองแห้ง', 'ใบตองเวทมนตร์'];
-  var LEAF_TONES = [[0x145c2a, 0x38a24f, 0x0d4220], [0x4f8f2a, 0x9fd65a, 0x3c7020], [0x7a5a2a, 0xc9a35a, 0x5c4320], [0x5a2a8a, 0xd77bff, 0x3d1a66]];
+  // what the petals are made of (order is part of the saved data: only ever append)
+  var LEAF_COLORS = ['ใบตองสด', 'ใบตองอ่อน', 'ใบตองแห้ง', 'ใบตองเวทมนตร์', 'กลีบบัวชมพู', 'กลีบกุหลาบแดง', 'ดาวเรืองส้ม', 'กระดาษสายรุ้ง', 'ทองคำเปลว'];
+  // [base, tip, edge] colours per petal; null = rainbow (each petal a different colour)
+  var LEAF_TONES = [[0x145c2a, 0x38a24f, 0x0d4220], [0x4f8f2a, 0x9fd65a, 0x3c7020], [0x7a5a2a, 0xc9a35a, 0x5c4320], [0x5a2a8a, 0xd77bff, 0x3d1a66],
+    [0xfbe3ee, 0xff5a9a, 0xff9cc4], [0x8e0f2a, 0xff3b5c, 0x6a0a1f], [0xe36b00, 0xffc43d, 0xd45a00], null, [0xb8860b, 0xffe27a, 0x8a6508]];
+  var RAINBOW_TONES = [[0xd81b3c, 0xff6b81, 0xa3122e], [0xe36b00, 0xffb347, 0xb85000], [0xd4a800, 0xfff176, 0xa88400],
+    [0x2e7d32, 0x81c784, 0x1b5e20], [0x1565c0, 0x64b5f6, 0x0d47a1], [0x6a1b9a, 0xce93d8, 0x4a148c]];
   // things to stick on the krathong; the order is part of the saved data: only ever append
   var ITEMS = [
     { id: 'candle', name: 'เทียน', icon: '🕯️' }, { id: 'incense', name: 'ธูป', icon: '🥢' },
@@ -141,7 +146,7 @@
       trunk: clamp(d.trunk, TRUNK_MIN, TRUNK_MAX, TRUNK_DEFAULT),
       leaf: cleanLeaf(d.leaf),
       leafColor: pick(d.leafColor, LEAF_COLORS.length, 0),
-      petals: num(d.petals) ? Math.round(Math.max(PETALS_MIN, Math.min(PETALS_MAX, d.petals))) : PETALS_DEFAULT,
+      petals: num(d.petals) ? (d.petals <= 0 ? 0 : Math.round(Math.max(PETALS_MIN, Math.min(PETALS_MAX, d.petals)))) : PETALS_DEFAULT,   // 0 = no petals
       flowers: pick(d.flowers, FLOWERS.length, 0),
       items: items,
       doodles: doodles
@@ -197,7 +202,7 @@
 
   return {
     BASES: BASES, CUSTOM_BASE: CUSTOM_BASE, MATERIALS: MATERIALS, FLOWERS: FLOWERS, FLOWER_COLORS: FLOWER_COLORS,
-    LEAF_COLORS: LEAF_COLORS, LEAF_TONES: LEAF_TONES, ITEMS: ITEMS, ITEM: ITEM, INK: INK, PRESET_LEAVES: PRESET_LEAVES,
+    LEAF_COLORS: LEAF_COLORS, LEAF_TONES: LEAF_TONES, RAINBOW_TONES: RAINBOW_TONES, ITEMS: ITEMS, ITEM: ITEM, INK: INK, PRESET_LEAVES: PRESET_LEAVES,
     TRUNK_MIN: TRUNK_MIN, TRUNK_MAX: TRUNK_MAX, TRUNK_DEFAULT: TRUNK_DEFAULT, PETALS_MIN: PETALS_MIN, PETALS_MAX: PETALS_MAX,
     SCALE_MIN: SCALE_MIN, SCALE_MAX: SCALE_MAX,
     MAX_LEAF_POINTS: MAX_LEAF_POINTS, MAX_ITEMS: MAX_ITEMS, MAX_DOODLES: MAX_DOODLES, MAX_DOODLE_POINTS: MAX_DOODLE_POINTS,

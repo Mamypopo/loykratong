@@ -10,7 +10,10 @@
   'use strict';
   var D = global.LoyKrathongDesign;
   var BASE_ICONS = ['🍃', '🪷', '🍞', '🥥', '🦢', '🐢'];
-  var LEAF_SWATCH = ['#38a24f', '#9fd65a', '#c9a35a', '#d77bff'];
+  // swatch per petal material (same order as LeafColors in design.js); the rainbow shows as a gradient
+  var LEAF_SWATCH = ['#38a24f', '#9fd65a', '#c9a35a', '#d77bff', '#ff7fb0', '#e53950', '#ffa31a',
+    'linear-gradient(135deg,#ff6b81,#ffb347,#fff176,#81c784,#64b5f6,#ce93d8)', '#ffd54a'];
+  function inkFor(i) { var c = LEAF_SWATCH[i] || LEAF_SWATCH[0]; return c.charAt(0) === '#' ? c : '#b388ff'; }   // canvas needs a plain colour
   var CSS = [
     '.lkw-top{position:absolute;left:0;right:0;top:0;z-index:21;display:flex;align-items:center;gap:8px;padding:max(10px,env(safe-area-inset-top)) 12px 10px;pointer-events:none}',
     '.lkw-top>*{pointer-events:auto}',
@@ -163,7 +166,7 @@
     }
     function changed() { table.refresh(); }
 
-    var TABS = [['base', 'ฐาน'], ['leaf', 'กลีบใบตอง'], ['stick', 'ติดของ'], ['draw', 'วาดเอง'], ['photo', 'รูปของฉัน']];
+    var TABS = [['base', 'ฐาน'], ['leaf', 'กลีบ'], ['stick', 'ติดของ'], ['draw', 'วาดเอง'], ['photo', 'รูปของฉัน']];
     TABS.forEach(function (t) {
       var b = btn('lkw-tab', t[1], function () { tab = t[0]; table.mode('build'); setTool(null); render(); });
       b.setAttribute('role', 'tab'); b.dataset.tab = t[0];
@@ -227,7 +230,7 @@
       var ctx = cv.getContext('2d'), path = [], drawing = false;
       function drawLeaf() {
         ctx.clearRect(0, 0, 420, 420);
-        var tone = LEAF_SWATCH[look.design.leafColor] || LEAF_SWATCH[0];
+        var tone = inkFor(look.design.leafColor);
         ctx.save();
         ctx.fillStyle = tone; ctx.globalAlpha = look.design.leaf ? 0.25 : 1;
         ctx.beginPath(); ctx.moveTo(30, 50); ctx.quadraticCurveTo(210, 8, 390, 50); ctx.lineTo(390, 370); ctx.quadraticCurveTo(210, 412, 30, 370); ctx.closePath(); ctx.fill();
@@ -271,7 +274,7 @@
       var side = el('div', 'lkw-side');
       function renderSide() {
         side.textContent = '';
-        side.appendChild(el('div', null, 'ลากนิ้ววาดรูปกลีบบนใบตอง ปล่อยนิ้ว = ตัด'));
+        side.appendChild(el('div', null, 'ลากนิ้ววาดรูปกลีบ ปล่อยนิ้ว = ตัด'));
         var presets = el('div', 'lkw-chips');
         D.PRESET_LEAVES.forEach(function (p) {
           var b = btn('lkw-chip', p.name, function () {
@@ -291,9 +294,14 @@
         });
         side.appendChild(sw);
         var cnt = el('div', 'lkw-chips');
-        cnt.appendChild(btn('lkw-chip', '－', function () { look.design.petals = Math.max(D.PETALS_MIN, look.design.petals - 1); look.design.base = D.CUSTOM_BASE; changed(); renderSide(); }, 'กลีบน้อยลง'));
-        cnt.appendChild(el('span', null, look.design.petals + ' กลีบ'));
-        cnt.appendChild(btn('lkw-chip', '＋', function () { look.design.petals = Math.min(D.PETALS_MAX, look.design.petals + 1); look.design.base = D.CUSTOM_BASE; changed(); renderSide(); }, 'กลีบมากขึ้น'));
+        function setPetals(p) { look.design.petals = p; look.design.base = D.CUSTOM_BASE; changed(); renderSide(); }
+        var none = look.design.petals === 0;
+        cnt.appendChild(btn('lkw-chip', '－', function () { setPetals(look.design.petals <= D.PETALS_MIN ? 0 : look.design.petals - 1); }, 'กลีบน้อยลง'));
+        cnt.appendChild(el('span', null, none ? 'ไม่มีกลีบ' : look.design.petals + ' กลีบ'));
+        cnt.appendChild(btn('lkw-chip', '＋', function () { setPetals(none ? D.PETALS_MIN : Math.min(D.PETALS_MAX, look.design.petals + 1)); }, 'กลีบมากขึ้น'));
+        var noneB = btn('lkw-chip', 'ไม่มีกลีบ', function () { setPetals(none ? 11 : 0); });
+        noneB.setAttribute('aria-pressed', String(none));
+        cnt.appendChild(noneB);
         side.appendChild(cnt);
       }
       renderSide();
@@ -466,7 +474,7 @@
       cut: function (h) {
         look.design.base = D.CUSTOM_BASE; look.design.trunk = h;
         changed(); setHint('');
-        toast('🔪 ฉับ! ได้ฐาน' + (D.MATERIALS[look.design.material] || D.MATERIALS[0]).name + 'สูง ' + Math.round(h * 10) + ' นิ้ว ต่อไปตัดกลีบใบตองกัน');
+        toast('🔪 ฉับ! ได้ฐาน' + (D.MATERIALS[look.design.material] || D.MATERIALS[0]).name + 'สูง ' + Math.round(h * 10) + ' นิ้ว ต่อไปตัดกลีบกัน');
         tab = 'leaf'; render();
       }
     });
