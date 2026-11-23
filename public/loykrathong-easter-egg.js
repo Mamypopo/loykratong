@@ -516,7 +516,7 @@
       pr: LOW ? 1 : MID ? 1.5 : 2,
       bloom: useBloom && !LOW,
       stars: lite ? 450 : MID ? 800 : 1100,
-      krathongs: lite ? 6 : MID ? 9 : 12,
+      krathongs: lite ? 2 : MID ? 3 : 4,
       lanterns: lite ? 12 : MID ? 20 : 30,
       lotus: lite ? 6 : MID ? 9 : 12,
       fireflies: lite ? 14 : MID ? 26 : 40,
@@ -2386,6 +2386,57 @@
 
     // ---- the river "hippo-dog": a chubby black-and-tan dog that lives in the river like a hippo —
     // lurks with only eyes/ears/nose above water, floats, yawns, dives and resurfaces with a splash
+    var updateBoat = (function makeBoat() {
+      var g = new THREE.Group(), p = [];
+      // hull: a long half-shell, darker inside, a gold rim stripe, raised bow and stern
+      p.push({ geo: new THREE.SphereGeometry(1, 24, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), color: 0x8a5a34, m: M(0, 0.32, 0, null, 2.7, 0.55, 0.72) });
+      p.push({ geo: new THREE.CylinderGeometry(1, 1, 0.04, 24), color: 0x4a2a14, m: M(0, 0.3, 0, null, 2.55, 1, 0.62) });
+      p.push({ geo: new THREE.TorusGeometry(1, 0.035, 6, 32), color: 0xf6c344, m: M(0, 0.33, 0, E(Math.PI / 2, 0, 0), 2.68, 0.7, 1) });
+      [-1, 1].forEach(function (sd) {
+        p.push({ geo: new THREE.ConeGeometry(0.16, 0.75, 8), color: 0x8a5a34, m: M(2.55 * sd, 0.55, 0, E(0, 0, -sd * 0.9)) });
+        // lantern on a pole at each end
+        p.push({ geo: new THREE.CylinderGeometry(0.02, 0.02, 0.9, 5), color: 0x5a3416, m: M(2.1 * sd, 0.75, 0) });
+        p.push({ geo: S(1, 12, 10), color: 0xd81b3c, m: M(2.1 * sd, 1.22, 0, null, 0.14, 0.18, 0.14) });
+        p.push({ geo: new THREE.CylinderGeometry(0.08, 0.08, 0.04, 10), color: 0xf6c344, m: M(2.1 * sd, 1.42, 0) });
+      });
+      // the rower: blue shirt, a ngob hat
+      p.push({ geo: new THREE.CylinderGeometry(0.24, 0.3, 0.6, 12), color: 0x3a6fd8, m: M(-0.3, 0.62, 0) });
+      p.push({ geo: S(0.22, 14, 12), color: 0xe3ad84, m: M(-0.3, 1.08, 0) });
+      p.push({ geo: new THREE.ConeGeometry(0.5, 0.26, 18), color: 0xd9b26a, m: M(-0.3, 1.33, 0) });
+      [-1, 1].forEach(function (sd) { p.push({ geo: S(0.03, 6, 4), color: 0x1b1030, m: M(-0.12, 1.12, 0.09 * sd) }); });
+      // a few krathongs to sell, in the middle of the boat
+      [[0.6, 0.2], [1.05, -0.15], [0.85, 0.22]].forEach(function (c, i) {
+        p.push({ geo: new THREE.CylinderGeometry(0.17, 0.18, 0.12, 12), color: 0x3f8a5a, m: M(c[0], 0.42, c[1]) });
+        p.push({ geo: S(0.07, 8, 6), color: [0xffa31a, 0xff6f9e, 0xffffff][i], m: M(c[0], 0.52, c[1]) });
+      });
+      g.add(withOutline(new THREE.Mesh(merge(p), mats.vc)));
+      var paddle = new THREE.Group(); paddle.position.set(-0.3, 0.8, 0.32); g.add(paddle);
+      var pp = [{ geo: new THREE.CylinderGeometry(0.025, 0.025, 1.5, 5), color: 0x6b3d1c, m: M(0, -0.45, 0) },
+                { geo: new THREE.BoxGeometry(0.06, 0.45, 0.18), color: 0x8a5a34, m: M(0, -1.2, 0) }];
+      paddle.add(withOutline(new THREE.Mesh(merge(pp), mats.vc)));
+      var glows = [-1, 1].map(function (sd) { var gl = sprite(softTex, 0xff7a4a, 1.6, 0.55); gl.position.set(2.1 * sd, 1.22, 0); g.add(gl); return gl; });
+      g.scale.setScalar(1.25);
+      scene.add(g);
+      var b = { x: -24, z: -14, dir: 1, yaw: 0, rip: 0 };
+      return function (dt, now) {
+        b.x += b.dir * 1.1 * dt;
+        if (b.x > 26 || b.x < -26) { b.dir = -b.dir; b.x = Math.max(-26, Math.min(26, b.x)); }   // turn around at the banks
+        var want = b.dir > 0 ? 0 : Math.PI;   // hull runs along x
+        b.yaw += (want - b.yaw) * Math.min(1, dt * 0.8);
+        var wy = wave(b.x, b.z, now);
+        g.position.set(b.x, wy - 0.08 + Math.sin(now * 1.4) * 0.03, b.z);
+        g.rotation.set(Math.sin(now * 1.1) * 0.03, b.yaw, Math.sin(now * 0.9) * 0.04);
+        paddle.rotation.z = Math.sin(now * 2.4) * 0.6; paddle.rotation.x = 0.25 + Math.cos(now * 2.4) * 0.2;
+        glows.forEach(function (gl, i) { gl.material.opacity = 0.45 + 0.12 * Math.sin(now * 7 + i * 2); });
+        b.rip -= dt;
+        if (b.rip <= 0) { ripple(b.x - b.dir * 2.2, b.z, 2); b.rip = 0.6; }
+        // krathongs in its way are nudged aside (they wobble, never capsize)
+        for (var bi = 0; bi < krathongs.length; bi++) {
+          var kk = krathongs[bi], kd = kk.userData, dx = kk.position.x - b.x, dz = kk.position.z - b.z;
+          if (Math.abs(dx) < 2.6 && Math.abs(dz) < 1.1 && now - (kd.bumpAt || -9) > 1.5) { kd.bumpAt = now; bumpKrathong(kk, b.x, b.z, 0.5); }
+        }
+      };
+    })();
     var dogInfo = { state: '', charges: 0, bumps: 0 };   // for stats() / ?lkdebug=1
     var updateDog = (function makeDog() {
       var V3 = THREE.Vector3;
@@ -3037,6 +3088,7 @@
       // kids + ripples
       for (var kd = 0; kd < kids.length; kd++) updateKid(kids[kd], dt, t);
       updateDog(dt, t);
+      updateBoat(dt, t);
       for (var rq = 0; rq < ripples.length; rq++) {
         var rr = ripples[rq], rl = rr.userData.life;
         if (rl > 1.2) { rr.visible = false; continue; }
