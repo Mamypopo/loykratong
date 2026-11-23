@@ -106,6 +106,24 @@
     button:active { transform: translateY(1px); }
     input:focus-visible, button:focus-visible { outline: 3px solid var(--moon); outline-offset: 3px; }
     .fine { margin: 14px 0 0; font-size: 14px; color: var(--muted); }
+    .screen-link { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
+    .screen-link:hover { color: var(--moon); }
+    .screen-link:focus-visible { outline: 3px solid var(--moon); outline-offset: 3px; border-radius: 4px; }
+    /* big screen: one click goes full screen and starts the music; a small corner button gets back into full screen */
+    .go-big {
+      position: fixed; z-index: 2147483200; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      display: flex; flex-direction: column; align-items: center; gap: 4px; width: auto; margin: 0;
+      padding: 22px 44px; font-size: clamp(22px, 2.4vw, 34px); border-radius: 999px;
+      box-shadow: 0 0 0 6px rgba(255, 197, 107, .25), 0 18px 50px rgba(0, 0, 0, .5);
+    }
+    .go-big small { font-size: .5em; font-weight: 400; opacity: .8; }
+    .go-full {
+      position: fixed; z-index: 2147483200; left: 20px; top: 20px; width: auto; margin: 0; padding: 10px 18px;
+      font-size: 16px; background: rgba(7, 15, 38, .72); color: var(--moon); border: 1.5px solid rgba(243, 230, 196, .4);
+      box-shadow: none;
+    }
+    .go-full:hover { background: rgba(7, 15, 38, .9); }
+    .go-big[hidden], .go-full[hidden] { display: none; }
 
     /* big-screen corner: QR to join + running total */
     .join {
@@ -142,6 +160,7 @@
       <input type="text" id="name" name="nickname" maxlength="40" placeholder="เช่น สมใจ" autocomplete="nickname" enterkeyhint="go">
       <button type="submit">ไปลอยกระทง</button>
       <p class="fine" id="note">ไม่ต้องสมัครหรือเข้าสู่ระบบ เว้นชื่อว่างไว้ได้</p>
+      <p class="fine"><a class="screen-link" href="/?screen=1">🖥 เปิดโหมดจอใหญ่ (สำหรับโปรเจคเตอร์)</a></p>
     </form>
   </main>
 

@@ -113,6 +113,28 @@
       panel.querySelector('.qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
     }).catch(function () { panel.querySelector('.qr').hidden = true; });
 
+    // one click: full screen + music (browsers only allow both after a click), then the button gets out of the way
+    var canFull = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+    function isFull() { return !!(document.fullscreenElement || document.webkitFullscreenElement); }
+    function goFull() {
+      var el = document.documentElement;
+      try { var p = (el.requestFullscreen || el.webkitRequestFullscreen).call(el); if (p && p.catch) p.catch(function () {}); } catch (e) { /* not allowed */ }
+      // the scene starts its music on a pointerdown inside it; this click counts as the user's gesture
+      var scene = document.querySelector('.lk-egg');
+      if (scene) scene.dispatchEvent(new Event('pointerdown'));
+    }
+    var big = document.createElement('button');
+    big.type = 'button'; big.className = 'go-big';
+    big.innerHTML = '▶ เริ่มแสดงบนจอใหญ่<small>เต็มจอ และเปิดเพลง</small>';
+    var small = document.createElement('button');
+    small.type = 'button'; small.className = 'go-full'; small.textContent = '⛶ เต็มจอ'; small.hidden = true;
+    big.addEventListener('click', function () { goFull(); big.hidden = true; small.hidden = !canFull || isFull(); });
+    small.addEventListener('click', function () { goFull(); });
+    function syncFull() { if (big.hidden) small.hidden = !canFull || isFull(); }
+    document.addEventListener('fullscreenchange', syncFull);
+    document.addEventListener('webkitfullscreenchange', syncFull);
+    document.body.appendChild(big); document.body.appendChild(small);
+
     var countEl = panel.querySelector('.count');
     egg.show({
       screen: true, wishFeed: FEED,
