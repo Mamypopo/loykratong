@@ -106,3 +106,27 @@ test('mergeFeed keeps the look flag so friends see the krathong as it was made',
   assert.equal(out.fresh.find((x) => x.id === 'a').look, true);
   assert.equal(out.fresh.find((x) => x.id === 'b').look, false);
 });
+
+const egg2 = loadEgg();
+const pickReplay = egg2._pickReplay, replayGap = egg2._replayGap;
+
+test('pickReplay never repeats a wish within the cooldown and skips ones on screen', () => {
+  const pool = [W('a'), W('b')];
+  const shown = {};
+  const first = pickReplay(pool, shown, 1000, {}, 90000);
+  assert.ok(first);
+  shown[first.id] = 1000;
+  const second = pickReplay(pool, shown, 2000, {}, 90000);
+  assert.ok(second && second.id !== first.id);
+  shown[second.id] = 2000;
+  assert.equal(pickReplay(pool, shown, 50000, {}, 90000), null);          // both shown recently: nothing
+  assert.equal(pickReplay(pool, shown, 92000, {}, 90000).id, first.id);   // the one shown longest ago comes back first
+  assert.equal(pickReplay(pool, shown, 99000, { [first.id]: 1, [second.id]: 1 }, 90000), null);   // both still floating
+  assert.equal(pickReplay([], {}, 0, {}, 90000), null);
+});
+
+test('replayGap waits longer when only a few wishes exist', () => {
+  assert.ok(replayGap(1) >= 18000);
+  assert.ok(replayGap(5) > replayGap(50));
+  assert.ok(replayGap(300) >= 6000);
+});
