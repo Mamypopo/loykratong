@@ -1,0 +1,90 @@
+'use strict';
+// GET  /api/wishes            -> { count, wishes: [{ id, name, wish }] } newest first (edge-cached 3s)
+// POST /api/wishes {name,wish} -> 201 { ok, id } | 400 | 403 | 405 | 413 | 415 | 422 | 429 | 503
+const { check } = require('../public/filter.js');
+const { storeFromEnv } = require('../lib/store.js');
+
+const MAX_NAME = 40, MAX_WISH = 80, MAX_BODY = 4096, LIST_SIZE = 50;
+
+function clean(s, n) {
+  return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
+}
+
+function send(res, code, body, cache) {
+  res.statusCode = code;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', cache || 'no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.end(JSON.stringify(body));
+}
+
+function clientIp(req) {
+  const h = req.headers;
+  return String(h['x-real-ip'] || String(h['x-forwarded-for'] || '').split(',')[0] || (req.socket && req.socket.remoteAddress) || '').trim() || 'unknown';
+}
+
+// only this site may post: Origin absent (same-origin tooling) or equal to our own host
+function sameOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  return origin === 'https://' + host || origin === 'http://' + host;
+}
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let size = 0; const chunks = [];
+    req.on('data', (c) => {
+      size += c.length;
+      if (size > MAX_BODY) { reject(Object.assign(new Error('too big'), { code: 413 })); req.destroy && req.destroy(); return; }
+      chunks.push(c);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
+}
+
+function createHandler({ store }) {
+  return async function handler(req, res) {
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      if (!store) return send(res, 200, { count: 0, wishes: [] }, 'no-store');
+      try {
+        return send(res, 200, await store.list(LIST_SIZE), 'public, s-maxage=3, stale-while-revalidate=10');
+      } catch (e) {
+        console.error('list failed', e.message);
+        return send(res, 200, { count: 0, wishes: [] }, 'no-store');
+      }
+    }
+    if (req.method !== 'POST') { res.setHeader('Allow', 'GET, POST'); return send(res, 405, { error: 'method' }); }
+
+    if (!sameOrigin(req)) return send(res, 403, { error: 'origin' });
+    if (!/^application\/json\b/i.test(String(req.headers['content-type'] || ''))) return send(res, 415, { error: 'json_only' });
+    if (Number(req.headers['content-length']) > MAX_BODY) return send(res, 413, { error: 'too_big' });
+
+    let raw;
+    try { raw = await readBody(req); } catch (e) { return send(res, e.code === 413 ? 413 : 400, { error: e.code === 413 ? 'too_big' : 'bad_body' }); }
+    let data;
+    try { data = JSON.parse(raw); } catch (e) { return send(res, 400, { error: 'bad_json' }); }
+
+    const name = clean(data && data.name, MAX_NAME), wish = clean(data && data.wish, MAX_WISH);
+    if (!wish) return send(res, 400, { error: 'empty' });
+    if (!check(wish).ok || (name && !check(name).ok)) return send(res, 422, { error: 'blocked' });
+    if (!store) return send(res, 503, { error: 'storage' });
+
+    try {
+      if (!(await store.rateLimit(clientIp(req)))) return send(res, 429, { error: 'too_many' });
+      const id = await store.add({ name, wish });
+      return send(res, 201, { ok: true, id });
+    } catch (e) {
+      console.error('add failed', e.message);
+      return send(res, 503, { error: 'storage' });
+    }
+  };
+}
+
+let defaultHandler = null;
+module.exports = function (req, res) {
+  if (!defaultHandler) defaultHandler = createHandler({ store: storeFromEnv() });
+  return defaultHandler(req, res);
+};
+module.exports.createHandler = createHandler;
