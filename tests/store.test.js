@@ -41,12 +41,13 @@ test('list reads newest wishes and the counter in one round trip, skipping broke
   assert.deepEqual(out, { count: 7, wishes: [{ id: 'b', name: 'n', wish: 'w2' }, { id: 'a', name: '', wish: 'w1' }] });
 });
 
-test('rateLimit is SET NX EX 4 and allows only when Redis answers OK', async () => {
-  const f = fakeFetch([[{ result: 'OK' }], [{ result: null }]]);
+test('allow: per-client SET NX EX 4 plus a per-IP counter capped at 120 a minute', async () => {
+  const f = fakeFetch([[{ result: 'OK' }, { result: 'OK' }, { result: 1 }], [{ result: null }, { result: null }, { result: 2 }], [{ result: 'OK' }, { result: null }, { result: 121 }]]);
   const store = createStore({ url: 'https://r', token: 't', fetch: f });
-  assert.equal(await store.rateLimit('1.2.3.4'), true);
-  assert.equal(await store.rateLimit('1.2.3.4'), false);
-  assert.deepEqual(f.calls[0].body, [['SET', 'lk:rl:1.2.3.4', '1', 'NX', 'EX', '4']]);
+  assert.equal(await store.allow({ client: 'c1', ip: '1.2.3.4' }), true);
+  assert.equal(await store.allow({ client: 'c1', ip: '1.2.3.4' }), false);
+  assert.equal(await store.allow({ client: 'c2', ip: '1.2.3.4' }), false);
+  assert.deepEqual(f.calls[0].body, [['SET', 'lk:rl:c:c1', '1', 'NX', 'EX', '4'], ['SET', 'lk:rl:ip:1.2.3.4', '0', 'NX', 'EX', '60'], ['INCR', 'lk:rl:ip:1.2.3.4']]);
 });
 
 test('a Redis error surfaces as a rejected promise', async () => {

@@ -1,13 +1,13 @@
 'use strict';
 // GET  /api/wishes            -> { count, wishes: [{ id, name, wish }] } newest first (edge-cached 3s)
 // POST /api/wishes {name,wish} -> 201 { ok, id } | 400 | 403 | 405 | 413 | 415 | 422 | 429 | 503
-const { check } = require('../public/filter.js');
+const { check, HIDDEN } = require('../public/filter.js');
 const { storeFromEnv } = require('../lib/store.js');
 
 const MAX_NAME = 40, MAX_WISH = 80, MAX_BODY = 4096, LIST_SIZE = 50;
 
 function clean(s, n) {
-  return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
+  return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(HIDDEN, '').replace(/\s+/g, ' ').trim().slice(0, n);
 }
 
 function send(res, code, body, cache) {
@@ -52,7 +52,7 @@ function createHandler({ store }) {
         return send(res, 200, await store.list(LIST_SIZE), 'public, s-maxage=3, stale-while-revalidate=10');
       } catch (e) {
         console.error('list failed', e.message);
-        return send(res, 200, { count: 0, wishes: [] }, 'no-store');
+        return send(res, 503, { error: 'storage' });   // the client keeps what it already shows
       }
     }
     if (req.method !== 'POST') { res.setHeader('Allow', 'GET, POST'); return send(res, 405, { error: 'method' }); }
@@ -72,7 +72,11 @@ function createHandler({ store }) {
     if (!store) return send(res, 503, { error: 'storage' });
 
     try {
-      if (!(await store.rateLimit(clientIp(req)))) return send(res, 429, { error: 'too_many' });
+      // limit per browser (random id kept in localStorage), because a whole office shares one public IP;
+      // the per-IP ceiling only stops scripted floods
+      const ip = clientIp(req);
+      const client = /^[A-Za-z0-9-]{8,64}$/.test(String(data.client || '')) ? String(data.client) : 'ip-' + ip;
+      if (!(await store.allow({ client, ip }))) return send(res, 429, { error: 'too_many' });
       const id = await store.add({ name, wish });
       return send(res, 201, { ok: true, id });
     } catch (e) {

@@ -30,3 +30,16 @@ test('blocks phone numbers', () => {
 test('blocks @mentions', () => {
   assert.deepEqual(check('@someone'), { ok: false, reason: 'mention' });
 });
+
+test('review fix: normal phrases that only look bad across word boundaries are allowed', () => {
+  for (const s of ['I wish it comes true', 'wish it was', 'this hits', 'glass hole', 'as soon as possible', 'แกงกะหรี่อร่อย', 'กะหรี่ปั๊บ', 'ต้นดอกทองหลาง']) {
+    assert.deepEqual(check(s), { ok: true }, s);
+  }
+});
+
+test('review fix: Thai repeat mark and bidi controls do not hide bad words', () => {
+  assert.deepEqual(check('ควๆาย'), { ok: false, reason: 'bad_word' });
+  assert.deepEqual(check('\u202efuck'), { ok: false, reason: 'bad_word' });
+  assert.deepEqual(check('a s s'), { ok: false, reason: 'bad_word' });
+  assert.deepEqual(check('motherfucker'), { ok: false, reason: 'bad_word' });
+});

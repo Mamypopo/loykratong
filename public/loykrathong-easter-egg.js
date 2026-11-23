@@ -40,7 +40,7 @@
     // หรือ object { load: function (limit) -> Promise<[{name, wish}]>, save: function ({name, wish}) -> Promise }
     wishFeed: null,
     wishFeedEvery: [6000, 10000],  // สุ่มลอยคำอธิษฐานของคนอื่นทุกกี่ ms
-    wishPollMs: null,       // ถาม API หากระทงใหม่ทุกกี่ ms (null = 5000, จอใหญ่ 3000)
+    wishPollMs: null,       // ถาม API หากระทงใหม่ทุกกี่ ms (null = อัตโนมัติ: จอใหญ่ 3 วิ, ทั่วไป 12 วิ, ไม่มีคนแตะ 5 นาที 30 วิ)
     onFeed: null,           // function ({ count }) ทุกครั้งที่ดึง feed สำเร็จ (ใช้กับตัวนับบนจอใหญ่)
     screen: false,          // โหมดจอใหญ่: ไม่มีช่องพิมพ์/ปุ่มปิด, ลอยกระทงใหม่ของทุกคน
     wishReturnChance: 0.6,  // โอกาสที่กระทง+คำอธิษฐานที่ลอยหายไปแล้วจะสุ่มลอยกลับมาอีก (0–1, ลดลงทุกรอบ)
@@ -114,23 +114,49 @@
   function forcedByUrl() { return urlParam() !== null; }
 
   // wish feed adapter: a URL string or { load, save }
-  function clip(s, n) { return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n); }
-  // load(limit) -> Promise<{ count: number|null, wishes: [{ id?, name, wish }] }>
+  // bidi overrides/isolates and LRM/RLM would let text render reversed (built from code points: no invisible source chars)
+  var BIDI = new RegExp('[' + String.fromCharCode(0x200e, 0x200f, 0x202a) + '-' + String.fromCharCode(0x202e, 0x2066) + '-' + String.fromCharCode(0x2069) + ']', 'g');
+  function clip(s, n) { return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(BIDI, '').trim().slice(0, n); }
+
+  // random id for this browser, so the server can rate-limit per person rather than per office IP
+  var CLIENT_KEY = 'lk-client';
+  function clientId() {
+    var id = safeGet(CLIENT_KEY);
+    if (!id || !/^[A-Za-z0-9-]{8,64}$/.test(id)) {
+      id = 'c' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+      safeSet(CLIENT_KEY, id);
+    }
+    return id;
+  }
+
+  // how often to ask for new wishes: big screen 3s; others 12s, 30s once idle 5 minutes; x4 while the tab is hidden
+  function pollDelay(o) {
+    var ms = o.screen ? 3000 : o.idleMs > 300000 ? 30000 : 12000;
+    return o.hidden ? ms * 4 : ms;
+  }
+  // cap on wish cards on screen at once (each card is a blurred overlay moved every frame)
+  function canFloat(labelCount, screen) { return labelCount < (screen ? 16 : 8); }
+
+  // load(limit) -> Promise<{ count: number|null, wishes: [{ id?, name, wish }] }>  (rejects after timeoutMs)
   // save(entry) -> Promise<{ ok: boolean, status: number, error?: string, id?: string }>
-  function makeFeed(cfg) {
+  function makeFeed(cfg, o) {
     if (!cfg) return null;
+    var timeoutMs = (o && o.timeoutMs) || 8000;
     if (typeof cfg === 'string') {
       var url = cfg;
       return {
         load: function (limit) {
-          return fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'limit=' + limit, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
-            .then(function (r) { return r.ok ? r.json() : []; })
+          var ctl = typeof AbortController === 'function' ? new AbortController() : null;
+          var timer = ctl ? setTimeout(function () { ctl.abort(); }, timeoutMs) : null;
+          return fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'limit=' + limit, { credentials: 'same-origin', headers: { Accept: 'application/json' }, signal: ctl ? ctl.signal : undefined })
+            .then(function (r) { clearTimeout(timer); return r.ok ? r.json() : []; }, function (e) { clearTimeout(timer); throw e; })
             .then(function (d) {
               return Array.isArray(d) ? { count: null, wishes: d } : { count: d && typeof d.count === 'number' ? d.count : null, wishes: (d && d.wishes) || [] };
             });
         },
         save: function (entry) {
-          return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) })
+          var body = { name: entry.name, wish: entry.wish, client: clientId() };
+          return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
             .then(function (r) {
               return r.json().catch(function () { return {}; }).then(function (b) {
                 return { ok: r.ok, status: r.status, error: b && b.error, id: b && b.id };
@@ -2432,7 +2458,9 @@
     // otherwise float a random earlier wish every wishFeedEvery ms
     var feed = opts.demo ? null : makeFeed(opts.wishFeed);
     var feedState = { seen: {}, mine: {} }, freshQueue = [], pool = [], feedTimer = null, pollTimer = null, firstFetch = true;
-    var pollMs = opts.wishPollMs || (opts.screen ? 3000 : 5000);
+    var lastInput = Date.now();   // polling slows down when nobody has touched the page for a while
+    root.addEventListener("pointerdown", function () { lastInput = Date.now(); }, true);
+    root.addEventListener("keydown", function () { lastInput = Date.now(); }, true);
     var freshGap = opts.screen ? 1500 : 2500, lastFloat = 0, nextRandomAt = 0;
     if (feed && !opts.screen) root.querySelector('.lk-share-note').hidden = false;
     function randomGap() { var lo = opts.wishFeedEvery[0], hi = opts.wishFeedEvery[1]; return lo + Math.random() * Math.max(0, hi - lo); }
@@ -2450,14 +2478,14 @@
         }
         if (typeof opts.onFeed === 'function' && d && typeof d.count === 'number') opts.onFeed({ count: d.count });
       }).catch(function () { /* feed unavailable: just skip */ }).then(function () {
-        if (!closed) pollTimer = setTimeout(feedFetch, document.hidden ? pollMs * 4 : pollMs);
+        if (!closed) pollTimer = setTimeout(feedFetch, opts.wishPollMs || pollDelay({ screen: !!opts.screen, idleMs: Date.now() - lastInput, hidden: document.hidden }));
       });
     }
     function floatWish(e) { scene.launchFront({ name: e.name || 'เพื่อนในระบบ', wish: e.wish, other: true }); }
     function feedLoop() {
       if (closed) return;
       var now = Date.now();
-      if (scene && !document.hidden) {
+      if (scene && !document.hidden && canFloat(labelsLayer.querySelectorAll(".lk-label").length, !!opts.screen)) {
         if (freshQueue.length && now - lastFloat >= freshGap) {
           floatWish(freshQueue.shift()); lastFloat = now; nextRandomAt = now + randomGap();
         } else if (!freshQueue.length && pool.length && now >= nextRandomAt) {
@@ -2608,6 +2636,7 @@
     isSeason: isLoyKrathongSeason,
     festivalDate: function (year) { return festivalDate(year || new Date().getFullYear()); },
     preload: preload,
-    _mergeFeed: mergeFeed   // exposed for tests
+    // exposed for tests
+    _mergeFeed: mergeFeed, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
   };
 })(window);

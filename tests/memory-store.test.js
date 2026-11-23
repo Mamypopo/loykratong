@@ -11,10 +11,12 @@ test('memory store keeps newest first, caps the list and counts every wish', asy
   assert.deepEqual(out.wishes.map((w) => w.wish), ['3', '2']);
 });
 
-test('memory store rate limit frees the IP again after the window', async () => {
+test('memory store allow: per-client window, per-IP cap', async () => {
   let t = 1000;
-  const s = createMemoryStore({ rateMs: 4000, now: () => t });
-  assert.equal(await s.rateLimit('ip'), true);
-  t += 3999; assert.equal(await s.rateLimit('ip'), false);
-  t += 2; assert.equal(await s.rateLimit('ip'), true);
+  const s = createMemoryStore({ rateMs: 4000, ipPerMinute: 3, now: () => t });   // every attempt counts toward the IP cap, like Redis INCR
+  assert.equal(await s.allow({ client: 'a', ip: 'ip' }), true);
+  t += 3999; assert.equal(await s.allow({ client: 'a', ip: 'ip' }), false);
+  t += 2; assert.equal(await s.allow({ client: 'a', ip: 'ip' }), true);
+  assert.equal(await s.allow({ client: 'b', ip: 'ip' }), false);   // fourth attempt from this IP within the minute
+  t += 60001; assert.equal(await s.allow({ client: 'b', ip: 'ip' }), true);
 });

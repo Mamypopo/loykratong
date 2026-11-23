@@ -2,7 +2,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHandler } = require('../api/wishes.js');
-const { memoryStore, call } = require('./helpers.js');
+const { call } = require('./helpers.js');
+const { createMemoryStore } = require('../lib/memory-store.js');
+const memoryStore = () => createMemoryStore();
 
 const JSON_H = { 'content-type': 'application/json' };
 const post = (body, extra) => ({ method: 'POST', headers: Object.assign({}, JSON_H, { origin: 'https://lk.example.app' }, extra), body: JSON.stringify(body) });
@@ -20,8 +22,7 @@ test('POST stores a wish that the next GET returns with an id, newest first', as
   assert.equal(r1.statusCode, 201);
   assert.equal(r1.json.ok, true);
   assert.equal(typeof r1.json.id, 'string');
-  store._resetRateLimit();
-  await call(h, post({ name: 'บอส', wish: 'ขอให้งานราบรื่น' }));
+  await call(h, post({ name: 'บอส', wish: 'ขอให้งานราบรื่น', client: 'client-two-0001' }));
   const g = await call(h);
   assert.equal(g.json.count, 2);
   assert.deepEqual(g.json.wishes.map((w) => w.wish), ['ขอให้งานราบรื่น', 'ขอให้สุขภาพแข็งแรง']);
@@ -40,7 +41,7 @@ test('POST with a bad word in the wish or the name is rejected with 422 blocked'
   assert.equal((await call(h)).json.count, 0);
 });
 
-test('second POST from the same IP within the window is rejected with 429', async () => {
+test('second POST from the same client within the window is rejected with 429', async () => {
   const h = createHandler({ store: memoryStore() });
   assert.equal((await call(h, post({ wish: 'หนึ่ง' }))).statusCode, 201);
   const r = await call(h, post({ wish: 'สอง' }));
@@ -84,4 +85,31 @@ test('without storage configured: GET returns empty list, POST returns 503 stora
 
 test('other methods get 405', async () => {
   assert.equal((await call(createHandler({ store: memoryStore() }), { method: 'DELETE' })).statusCode, 405);
+});
+
+test('review fix: many colleagues behind one office IP can all post at once', async () => {
+  const h = createHandler({ store: memoryStore() });
+  for (let i = 0; i < 50; i++) {
+    const r = await call(h, post({ wish: 'ขอให้มีความสุข ' + i, client: 'office-client-' + String(i).padStart(4, '0') }));
+    assert.equal(r.statusCode, 201, 'client ' + i);
+  }
+});
+
+test('review fix: one IP is still capped at 120 posts per minute', async () => {
+  const h = createHandler({ store: memoryStore() });
+  let last;
+  for (let i = 0; i < 121; i++) last = await call(h, post({ wish: 'x' + i, client: 'spam-client-' + String(i).padStart(4, '0') }));
+  assert.equal(last.statusCode, 429);
+});
+
+test('review fix: bidi control characters are stripped before storing', async () => {
+  const store = memoryStore(), h = createHandler({ store });
+  await call(h, post({ name: '‮abc', wish: 'ขอให้⁦รวย‏' }));
+  const w = (await call(h)).json.wishes[0];
+  assert.ok(!/[‎‏‪-‮⁦-⁩]/.test(w.name + w.wish));
+});
+
+test('review fix: a storage error on GET is a 503, so the big-screen counter keeps its last value', async () => {
+  const h = createHandler({ store: { list: async () => { throw new Error('down'); } } });
+  assert.equal((await call(h)).statusCode, 503);
 });

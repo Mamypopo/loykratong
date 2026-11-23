@@ -57,3 +57,45 @@ test('entries without id fall back to name+wish as the key', () => {
   assert.equal(mergeFeed(st, [{ name: 'a', wish: 'x' }]).fresh.length, 1);
   assert.equal(mergeFeed(st, [{ name: 'a', wish: 'x' }]).fresh.length, 0);
 });
+
+// ---- review fixes: feed adapter and pacing helpers
+function loadEggWith(fetchImpl) {
+  const store = {};
+  const window = { navigator: {}, location: { search: '' }, localStorage: { getItem: (k) => store[k] || null, setItem: (k, v) => { store[k] = String(v); } } };
+  const ctx = vm.createContext({ window, document: {}, setTimeout, clearTimeout, Promise, console, fetch: fetchImpl, AbortController });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../public/loykrathong-easter-egg.js'), 'utf8'), ctx);
+  return window.LoyKrathongEasterEgg;
+}
+
+test('save sends the same random client id on every post from this browser', async () => {
+  const bodies = [];
+  const egg = loadEggWith(async (url, init) => { bodies.push(JSON.parse(init.body)); return { ok: true, status: 201, json: async () => ({ ok: true, id: 'x' }) }; });
+  const feed = egg._makeFeed('/api/wishes');
+  await feed.save({ name: 'a', wish: 'b' }); await feed.save({ name: 'a', wish: 'c' });
+  assert.match(bodies[0].client, /^[A-Za-z0-9-]{8,64}$/);
+  assert.equal(bodies[1].client, bodies[0].client);
+});
+
+test('load gives up on a hung request after the timeout instead of waiting forever', async () => {
+  const egg = loadEggWith((url, init) => new Promise((resolve, reject) => { init.signal.addEventListener('abort', () => reject(new Error('aborted'))); }));
+  const feed = egg._makeFeed('/api/wishes', { timeoutMs: 50 });
+  const t0 = Date.now();
+  await assert.rejects(feed.load(50));
+  assert.ok(Date.now() - t0 < 1000);
+});
+
+test('poll delay: big screen 3s; phones 12s, 30s after 5 idle minutes; hidden tabs x4', () => {
+  const egg = loadEggWith(async () => ({}));
+  assert.equal(egg._pollDelay({ screen: true, idleMs: 0, hidden: false }), 3000);
+  assert.equal(egg._pollDelay({ screen: false, idleMs: 0, hidden: false }), 12000);
+  assert.equal(egg._pollDelay({ screen: false, idleMs: 301000, hidden: false }), 30000);
+  assert.equal(egg._pollDelay({ screen: false, idleMs: 0, hidden: true }), 48000);
+});
+
+test('label cap: at most 8 wish cards on a phone and 16 on the big screen', () => {
+  const egg = loadEggWith(async () => ({}));
+  assert.equal(egg._canFloat(7, false), true);
+  assert.equal(egg._canFloat(8, false), false);
+  assert.equal(egg._canFloat(15, true), true);
+  assert.equal(egg._canFloat(16, true), false);
+});
