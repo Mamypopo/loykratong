@@ -120,3 +120,11 @@ test('pickFortune: a slip number in range, never the same one twice in a row', (
   }
   eggF._FORTUNES.forEach((f) => { assert.ok(f.text && f.rank, JSON.stringify(f)); });
 });
+
+test('shake detector: a drag counts one shake each time it swings back after travelling far enough', () => {
+  const run = (dxs) => { const feed = eggF._shakeDetector(12); return dxs.reduce((n, dx) => n + (feed(dx) ? 1 : 0), 0); };
+  assert.equal(run([5, 5, 5]), 0);                         // one way only: no shake yet
+  assert.equal(run([5, 5, 5, -5]), 1);                     // swung back after 15 px: one shake
+  assert.equal(run([2, -2, 2, -2]), 0);                    // jitter does not count
+  assert.equal(run([8, 8, -8, -8, 8, 8]), 2);              // back, then forth again: two shakes
+});

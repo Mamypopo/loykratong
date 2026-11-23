@@ -254,6 +254,17 @@
     { rank: 'อบอุ่น', text: 'ได้กลับบ้านเร็วไปกินข้าวกับคนที่รักบ่อยขึ้น' },
     { rank: 'สมหวัง', text: 'สิ่งที่อธิษฐานไว้วันนี้ คืบหน้าไปครึ่งทางแล้ว' }
   ];
+  // dragging the cup: one shake each time it swings back after travelling at least minTravel px one way
+  function shakeDetector(minTravel) {
+    var dir = 0, travel = 0;
+    return function (dx) {
+      if (!dx) return false;
+      var sg = dx > 0 ? 1 : -1, hit = false;
+      if (dir && sg !== dir) { hit = travel >= minTravel; travel = 0; }
+      dir = sg; travel += Math.abs(dx);
+      return hit;
+    };
+  }
   function pickFortune(prev, rnd) {
     var n = FORTUNES.length, i = Math.floor((rnd || Math.random)() * (n - 1));
     if (prev >= 0 && prev < n && i >= prev) i++;   // skip the slip drawn last time
@@ -382,6 +393,22 @@
     '.lk-slip-note{font-size:12px;color:#8a5a3a;margin:0 0 12px;min-height:1em}',
     '.lk-egg .lk-slip-ok{font:inherit;font-size:16px;font-weight:500;cursor:pointer;border:0;border-radius:999px;padding:9px 26px;background:linear-gradient(#fff0a0,#ffc94a 55%,#ff9f2e);color:#4a1f6b;box-shadow:0 4px 0 #b85c10}',
     '.lk-egg .lk-slip-ok:focus-visible{outline:3px solid #7bdff2;outline-offset:3px}',
+    '.lk-cupbox{position:relative;width:min(84vw,320px);padding:20px 20px 16px;border-radius:22px;text-align:center;color:#fff6d6;background:rgba(36,14,70,.92);border:1.5px solid rgba(255,226,122,.55);box-shadow:0 24px 60px rgba(0,0,0,.55);animation:lk-fade .3s both}',
+    '.lk-cupbox h3{margin:0 0 4px;font-size:20px;font-weight:500;color:#ffe27a}',
+    '.lk-cupbox p{margin:0;font-size:13px;color:#d9cff7}',
+    '.lk-cup{position:relative;width:120px;height:170px;margin:34px auto 10px;cursor:grab;touch-action:none;outline:0;transform-origin:50% 90%}',
+    '.lk-cup:active{cursor:grabbing}',
+    '.lk-cup:focus-visible{outline:3px solid #7bdff2;outline-offset:6px;border-radius:12px}',
+    '.lk-cup svg{width:100%;height:100%;display:block;overflow:visible}',
+    '.lk-cup.lk-shake{animation:lk-cup-shake .32s ease-in-out}',
+    '.lk-stick{position:absolute;left:50%;top:8px;width:16px;height:110px;margin-left:-8px;border-radius:3px;background:linear-gradient(90deg,#e8c27a,#f6dc9c,#d9ae62);color:#a3221a;font:700 13px/1 "Mitr",sans-serif;writing-mode:vertical-rl;display:grid;place-items:start center;padding-top:6px;opacity:0;box-shadow:0 2px 6px rgba(0,0,0,.4)}',
+    '.lk-cup.lk-out .lk-stick{animation:lk-stick-out .7s cubic-bezier(.2,1.4,.4,1) forwards}',
+    '.lk-meter{height:8px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden;margin:4px 8px 12px}',
+    '.lk-meter i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#ffc94a,#ff7a3c);transition:width .2s}',
+    '.lk-egg .lk-cup-skip{font:inherit;font-size:13px;cursor:pointer;background:none;border:0;color:#bfb3e6;text-decoration:underline;text-underline-offset:3px;padding:4px 8px}',
+    '@keyframes lk-cup-shake{0%,100%{transform:rotate(0)}20%{transform:rotate(-14deg) translateX(-6px)}50%{transform:rotate(12deg) translateX(6px)}75%{transform:rotate(-6deg)}}',
+    '@keyframes lk-stick-out{0%{opacity:1;transform:translateY(0)}100%{opacity:1;transform:translateY(-62px) rotate(-6deg)}}',
+    '@media (prefers-reduced-motion:reduce){.lk-cup.lk-shake{animation:none}.lk-cup.lk-out .lk-stick{animation:none;opacity:1;transform:translateY(-62px)}}',
     '@keyframes lk-slip-in{0%{opacity:0;transform:translateY(-60px) rotate(-8deg)}60%{opacity:1;transform:translateY(6px) rotate(3deg)}80%{transform:rotate(-2deg)}100%{transform:none}}',
     '@media (prefers-reduced-motion:reduce){.lk-slip{animation:lk-fade .3s both}}',
     '.lk-egg .lk-toast{z-index:30}',
@@ -3861,26 +3888,109 @@
 
     // เซียมซี: a slip drops in after you float; the "shared with everyone" note lands on it
     var FORTUNE_KEY = 'lk-fortune', fortuneNote = null;
+    var CUP_SVG = '<svg viewBox="0 0 120 170" aria-hidden="true">' +
+      // sticks poking out of the cup
+      '<g stroke="#d9ae62" stroke-width="6" stroke-linecap="round"><path d="M38 60 L34 6"/><path d="M50 60 L49 0"/><path d="M62 60 L64 10"/><path d="M74 60 L80 4"/><path d="M86 60 L92 16"/></g>' +
+      '<g fill="#c4302b"><circle cx="34" cy="8" r="3"/><circle cx="49" cy="2" r="3"/><circle cx="64" cy="12" r="3"/><circle cx="80" cy="6" r="3"/><circle cx="92" cy="18" r="3"/></g>' +
+      // bamboo cup: red lacquer with gold bands
+      '<path d="M22 52 H98 L92 162 Q60 170 28 162 Z" fill="#b8271f" stroke="#3d1763" stroke-width="3"/>' +
+      '<ellipse cx="60" cy="52" rx="38" ry="9" fill="#7a1612" stroke="#3d1763" stroke-width="3"/>' +
+      '<path d="M25 78 H95" stroke="#f6c344" stroke-width="5"/><path d="M28 138 H92" stroke="#f6c344" stroke-width="5"/>' +
+      '<text x="60" y="114" text-anchor="middle" font-size="26" fill="#f6c344" font-family="Mitr,sans-serif">ทาย</text></svg>';
+    var SHAKES = 7;
     function showFortune() {
       if (closed || !opts.fortune || opts.screen || opts.demo) return;
       var prev = parseInt(safeGet(FORTUNE_KEY), 10), i = pickFortune(isNaN(prev) ? -1 : prev);
       safeSet(FORTUNE_KEY, String(i));
       var ft = FORTUNES[i];
       var box = document.createElement('div'); box.className = 'lk-fortune';
-      box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'ใบเซียมซี');
-      box.innerHTML = '<div class="lk-slip"><div class="lk-slip-head">🎴 เซียมซีลอยกระทง</div><div class="lk-slip-no"></div>' +
+      box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'เซียมซี');
+      // 1) the cup: shake it (the phone itself, a drag back and forth, or taps)
+      box.innerHTML = '<div class="lk-cupbox"><h3>🎴 เขย่าเพื่อเสี่ยงเซียมซี</h3><p>เขย่ามือถือ ลากกระบอกไปมา หรือแตะรัวๆ</p>' +
+        '<div class="lk-cup" role="button" tabindex="0" aria-label="กระบอกเซียมซี แตะหรือเขย่า">' + CUP_SVG + '<span class="lk-stick"></span></div>' +
+        '<div class="lk-meter" aria-hidden="true"><i></i></div><button type="button" class="lk-cup-skip">ข้าม</button></div>';
+      var cup = box.querySelector('.lk-cup'), meter = box.querySelector('.lk-meter i'), shakes = 0, done = false;
+      box.querySelector('.lk-stick').textContent = 'ใบที่ ' + (i + 1);
+      function shake() {
+        if (done) return;
+        shakes++;
+        meter.style.width = Math.min(100, shakes / SHAKES * 100) + '%';
+        cup.classList.remove('lk-shake'); void cup.offsetWidth; cup.classList.add('lk-shake');
+        if (audio && audio.sfx && audio.sfx.launch) audio.sfx.launch(false);
+        var ua = navigator.userActivation;   // browsers refuse to buzz before the person has touched the page
+        if (navigator.vibrate && (!ua || ua.hasBeenActive)) { try { navigator.vibrate(18); } catch (e) { /* ignore */ } }
+        if (shakes >= SHAKES) {   // a stick jumps out, then the slip
+          done = true;
+          stopMotion();
+          cup.classList.add('lk-out');
+          setTimeout(function () { if (box.parentNode) showSlip(); }, 900);
+        }
+      }
+      // drag back and forth
+      var lastX = null, swing = shakeDetector(14);
+      cup.addEventListener('pointerdown', function (ev) {
+        askMotion();
+        lastX = ev.clientX;
+        try { cup.setPointerCapture(ev.pointerId); } catch (err) { /* ignore */ }
+      });
+      cup.addEventListener('pointermove', function (ev) {
+        if (lastX == null) return;
+        var dx = ev.clientX - lastX; lastX = ev.clientX;
+        cup.style.transform = 'rotate(' + Math.max(-18, Math.min(18, dx * 1.5)).toFixed(1) + 'deg)';
+        if (swing(dx)) shake();
+      });
+      function release() { lastX = null; cup.style.transform = ''; }
+      cup.addEventListener('pointerup', release);
+      cup.addEventListener('pointercancel', release);
+      // taps and keys
+      cup.addEventListener('click', function () { shake(); });
+      cup.addEventListener('keydown', function (ev) { if (ev.key === ' ' || ev.key === 'Enter') { ev.preventDefault(); shake(); } });
+      // shaking the phone itself (iPhone asks once, on the first touch of the cup)
+      var lastShake = 0, prevAcc = null, motionOn = false;
+      function onMotion(ev) {
+        var a = ev.accelerationIncludingGravity || ev.acceleration;
+        if (!a || a.x == null) return;
+        if (prevAcc) {
+          var jolt = Math.abs(a.x - prevAcc.x) + Math.abs(a.y - prevAcc.y) + Math.abs((a.z || 0) - (prevAcc.z || 0));
+          var now = Date.now();
+          if (jolt > 18 && now - lastShake > 160) { lastShake = now; shake(); }
+        }
+        prevAcc = { x: a.x, y: a.y, z: a.z };
+      }
+      function startMotion() { if (!motionOn) { motionOn = true; global.addEventListener('devicemotion', onMotion); } }
+      function stopMotion() { if (motionOn) { motionOn = false; global.removeEventListener('devicemotion', onMotion); } }
+      var asked = false;
+      function askMotion() {
+        if (asked) return; asked = true;
+        var DME = global.DeviceMotionEvent;
+        if (DME && typeof DME.requestPermission === 'function') {
+          DME.requestPermission().then(function (r) { if (r === 'granted') startMotion(); }).catch(function () { /* taps and drags still work */ });
+        }
+      }
+      if (global.DeviceMotionEvent && typeof global.DeviceMotionEvent.requestPermission !== 'function') startMotion();   // Android: no prompt
+
+      // 2) the slip
+      function showSlip() {
+        box.innerHTML = '<div class="lk-slip"><div class="lk-slip-head">🎴 เซียมซีลอยกระทง</div><div class="lk-slip-no"></div>' +
         '<span class="lk-slip-rank"></span><p class="lk-slip-text"></p><p class="lk-slip-note"></p>' +
         '<button type="button" class="lk-slip-ok">สาธุ 🙏</button></div>';
-      box.querySelector('.lk-slip-no').textContent = 'ใบที่ ' + (i + 1);
-      box.querySelector('.lk-slip-rank').textContent = ft.rank;
-      box.querySelector('.lk-slip-text').textContent = ft.text;
-      fortuneNote = box.querySelector('.lk-slip-note');
-      function shut() { if (box.parentNode) box.parentNode.removeChild(box); fortuneNote = null; document.removeEventListener('keydown', onEsc, true); }
+        box.setAttribute('aria-label', 'ใบเซียมซี');
+        box.querySelector('.lk-slip-no').textContent = 'ใบที่ ' + (i + 1);
+        box.querySelector('.lk-slip-rank').textContent = ft.rank;
+        box.querySelector('.lk-slip-text').textContent = ft.text;
+        var note = fortuneNote; fortuneNote = box.querySelector('.lk-slip-note');
+        if (note && note.textContent) fortuneNote.textContent = note.textContent;   // the "shared" note may have come in already
+        setTimeout(function () { var b = box.querySelector('.lk-slip-ok'); if (b && box.parentNode) b.focus({ preventScroll: true }); }, 400);
+      }
+      fortuneNote = document.createElement('span');   // holds the "shared" note until the slip shows
+      function shut() { stopMotion(); if (box.parentNode) box.parentNode.removeChild(box); fortuneNote = null; document.removeEventListener('keydown', onEsc, true); }
       function onEsc(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); shut(); } }
-      box.addEventListener('click', function (ev) { if (ev.target === box || ev.target.closest('.lk-slip-ok')) shut(); });
+      box.addEventListener('click', function (ev) {
+        if (ev.target === box || ev.target.closest('.lk-slip-ok') || ev.target.closest('.lk-cup-skip')) shut();
+      });
       document.addEventListener('keydown', onEsc, true);
       root.appendChild(box);
-      setTimeout(function () { var b = box.querySelector('.lk-slip-ok'); if (b && box.parentNode) b.focus({ preventScroll: true }); }, 400);
+      setTimeout(function () { if (box.parentNode && !done) cup.focus({ preventScroll: true }); }, 300);
     }
 
     root.querySelector('.lk-wish').addEventListener('submit', function (e) {
@@ -3995,6 +4105,6 @@
     festivalDate: function (year) { return festivalDate(year || new Date().getFullYear()); },
     preload: preload,
     // exposed for tests
-    _mergeFeed: mergeFeed, _pickFortune: pickFortune, _FORTUNES: FORTUNES, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
+    _mergeFeed: mergeFeed, _pickFortune: pickFortune, _shakeDetector: shakeDetector, _FORTUNES: FORTUNES, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
   };
 })(window);
