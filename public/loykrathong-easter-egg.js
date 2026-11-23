@@ -39,13 +39,12 @@
     // คำอธิษฐานของผู้ใช้อื่น: URL ของ API (GET ?limit=N คืน [{name, wish}], POST {name, wish})
     // หรือ object { load: function (limit) -> Promise<[{name, wish}]>, save: function ({name, wish}) -> Promise }
     wishFeed: null,
-    wishFeedEvery: null,    // null = ตามจำนวนคำอธิษฐาน (น้อย = ห่าง), หรือกำหนดเอง เช่น [6000, 10000] ms
     wishPollMs: null,       // ถาม API หากระทงใหม่ทุกกี่ ms (null = อัตโนมัติ: จอใหญ่ 3 วิ, ทั่วไป 12 วิ, ไม่มีคนแตะ 5 นาที 30 วิ)
     onFeed: null,           // function ({ count }) ทุกครั้งที่ดึง feed สำเร็จ (ใช้กับตัวนับบนจอใหญ่)
     screen: false,          // โหมดจอใหญ่: ไม่มีช่องพิมพ์/ปุ่มปิด, ลอยกระทงใหม่ของทุกคน
     photos: true,           // แสดงรูปที่คนแนบมากับกระทง (false = ซ่อนรูปของทุกคนบนจอนี้)
     workshop: true,         // ปุ่ม "ทำกระทงของฉัน" (ต้องโหลด design.js และ workshop.js ก่อนไฟล์นี้)
-    wishReturnChance: 0.35, // โอกาสที่กระทงของเราเองที่ลอยหายไปแล้วจะลอยกลับมาอีก 1 รอบ (0–1) ของคนอื่นวนกลับมาจาก feed เอง
+    wishReturnChance: 0,    // โอกาสที่กระทงของเราเองที่ลอยหายไปแล้วจะลอยกลับมาอีก 1 รอบ (0 = ลอยครั้งเดียวแล้วหายไป)
     demo: false,            // โหมดเดโม: เล่นอัตโนมัติ (ลอยกระทง+คำอธิษฐานตัวอย่าง) ไม่สนวันที่/ไม่บันทึกว่าเคยดู
     onClose: null,
     onReady: null,          // function ({ moonScreen }) once the 3D scene shows (landing page moon hand-over)
@@ -227,23 +226,7 @@
     return { fresh: fresh, pool: pool };
   }
 
-  // Which earlier wish to float again: none shown within cooldownMs, none still on screen, the one shown longest ago.
-  // shown: { key: time last floated }, onScreen: { key: 1 }
   function feedKey(e) { return e.id || e.name + '|' + e.wish; }
-  function pickReplay(pool, shown, now, onScreen, cooldownMs) {
-    var best = null, bestAt = Infinity;
-    for (var i = 0; i < (pool || []).length; i++) {
-      var k = feedKey(pool[i]), at = shown[k] == null ? -Infinity : shown[k];
-      if (onScreen[k] || now - at < cooldownMs) continue;
-      if (at < bestAt || (at === bestAt && Math.random() < 0.5)) { best = pool[i]; bestAt = at; }
-    }
-    return best;
-  }
-  // gap between replays: few wishes -> slow (a lone wish should not loop), many -> livelier
-  function replayGap(n) {
-    var ln = Math.log(Math.max(0, n) + 1);
-    return Math.round(Math.max(6, Math.min(20, 22 - 3.4 * ln)) * 1000);
-  }
 
   // folder this script was loaded from (to find semed-logo.png next to it)
   var SCRIPT_BASE = (function () {
@@ -2848,7 +2831,7 @@
     // other = a wish from another user: appears a little further out, blue card, no heart firework
     // returning = a wish that floated away and drifts back in (same look, no firework/chime)
     var returnQueue = [];
-    var RETURN_CHANCE = env.returnChance == null ? 0.35 : Math.max(0, Math.min(1, env.returnChance));
+    var RETURN_CHANCE = env.returnChance == null ? 0 : Math.max(0, Math.min(1, env.returnChance));
     function launchFront(info) {
       var other = !!(info && info.other), returning = !!(info && info.returning);
       var variant = info && info.variant != null ? info.variant : null;
@@ -3408,8 +3391,7 @@
       setTimeout(function () { if (p.parentNode) p.parentNode.removeChild(p); }, 1000);
     }
 
-    // other users' wishes: poll the feed; wishes nobody has floated here yet go first (a few seconds apart),
-    // otherwise float a random earlier wish every wishFeedEvery ms
+    // other users' wishes: poll the feed; each one this device has not seen floats past once, a few seconds apart
     var feed = opts.demo ? null : makeFeed(opts.wishFeed);
     // ids of wishes sent from this browser: kept across reloads so your own never come back to you as "others"
     var MINE_KEY = 'lk-mine', mineIds = {};
@@ -3418,35 +3400,27 @@
       mineIds[id] = 1;
       try { safeSet(MINE_KEY, JSON.stringify(Object.keys(mineIds).slice(-100))); } catch (e) { /* ignore */ }
     }
-    var feedState = { seen: {}, mine: mineIds }, freshQueue = [], pool = [], feedTimer = null, pollTimer = null, firstFetch = true;
-    var shownAt = {}, REPLAY_COOLDOWN = 90000;   // a wish floats again at most once every 90 s on this screen
-    function onScreenKeys() {
-      var o = {};
-      labelsLayer.querySelectorAll('.lk-label--other').forEach(function (el) { if (el.dataset.key) o[el.dataset.key] = 1; });
-      return o;
-    }
+    // every wish floats past once on this device, then it is gone for good (reloads included)
+    var SEEN_KEY = 'lk-seen', seenIds = {};
+    try { (JSON.parse(safeGet(SEEN_KEY) || '[]') || []).forEach(function (k) { seenIds[k] = 1; }); } catch (e) { /* ignore */ }
+    function saveSeen() { try { safeSet(SEEN_KEY, JSON.stringify(Object.keys(seenIds).slice(-300))); } catch (e) { /* ignore */ } }
+    var feedState = { seen: seenIds, mine: mineIds }, freshQueue = [], feedTimer = null, pollTimer = null, firstFetch = true;
     var lastInput = Date.now();   // polling slows down when nobody has touched the page for a while
     root.addEventListener("pointerdown", function () { lastInput = Date.now(); }, true);
     root.addEventListener("keydown", function () { lastInput = Date.now(); }, true);
-    var freshGap = opts.screen ? 1500 : 2500, lastFloat = 0, nextRandomAt = 0;
+    var freshGap = opts.screen ? 1500 : 2500, lastFloat = 0;
     if (feed && !opts.screen) root.querySelector('.lk-share-note').hidden = false;
-    function randomGap() {
-      var every = opts.wishFeedEvery;
-      if (every) return every[0] + Math.random() * Math.max(0, every[1] - every[0]);
-      return replayGap(pool.length) * (0.8 + Math.random() * 0.4);
-    }
     function feedFetch() {
       Promise.resolve(feed.load(50)).then(function (d) {
         var m = mergeFeed(feedState, d && d.wishes);
-        if (firstFetch) {   // wishes from before we opened: keep for random floats, show only the newest few now
+        if (firstFetch) {   // wishes from before we opened that this device has not seen: just the newest few
           firstFetch = false;
-          pool = m.fresh.slice();
           freshQueue = m.fresh.slice(-3);
         } else {
           freshQueue = freshQueue.concat(m.fresh);
           if (freshQueue.length > FRESH_MAX) freshQueue = freshQueue.slice(freshQueue.length - FRESH_MAX);
-          if (m.pool.length || m.fresh.length) pool = m.pool.concat(m.fresh);
         }
+        if (m.fresh.length) saveSeen();
         if (typeof opts.onFeed === 'function' && d && typeof d.count === 'number') opts.onFeed({ count: d.count });
       }).catch(function () { /* feed unavailable: just skip */ }).then(function () {
         if (!closed) pollTimer = setTimeout(feedFetch, opts.wishPollMs || pollDelay({ screen: !!opts.screen, idleMs: Date.now() - lastInput, hidden: document.hidden }));
@@ -3465,7 +3439,6 @@
       return lookCache[id];
     }
     function floatWish(e) {
-      shownAt[feedKey(e)] = Date.now();
       var info = { name: e.name || 'เพื่อนในระบบ', wish: e.wish, other: true, key: feedKey(e) };
       if (!e.look) { scene.launchFront(info); return; }
       fetchLook(e.id).then(function (l) {
@@ -3552,17 +3525,11 @@
       if (closed) return;
       var now = Date.now();
       if (scene && !document.hidden && canFloat(labelsLayer.querySelectorAll(".lk-label").length, !!opts.screen)) {
-        if (freshQueue.length && now - lastFloat >= freshGap) {
-          floatWish(freshQueue.shift()); lastFloat = now; nextRandomAt = now + randomGap();
-        } else if (!freshQueue.length && pool.length && now >= nextRandomAt) {
-          var again = pickReplay(pool, shownAt, now, onScreenKeys(), REPLAY_COOLDOWN);
-          if (again) { floatWish(again); lastFloat = now; }
-          nextRandomAt = now + randomGap();
-        }
+        if (freshQueue.length && now - lastFloat >= freshGap) { floatWish(freshQueue.shift()); lastFloat = now; }
       }
       feedTimer = setTimeout(feedLoop, 500);
     }
-    function startFeed() { if (!feed) return; nextRandomAt = Date.now() + 4500; feedFetch(); feedTimer = setTimeout(feedLoop, 2500); }
+    function startFeed() { if (!feed) return; feedFetch(); feedTimer = setTimeout(feedLoop, 2500); }
 
     // demo mode: autopilot that keeps launching wish krathongs and tapping the water
     var demoTimers = [];
@@ -3727,6 +3694,6 @@
     festivalDate: function (year) { return festivalDate(year || new Date().getFullYear()); },
     preload: preload,
     // exposed for tests
-    _mergeFeed: mergeFeed, _pickReplay: pickReplay, _replayGap: replayGap, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
+    _mergeFeed: mergeFeed, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
   };
 })(window);
