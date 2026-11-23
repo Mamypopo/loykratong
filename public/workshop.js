@@ -155,7 +155,7 @@
     function setHint(t) { hint.textContent = t || ''; }
     function showEdit(i) {
       edit.hidden = i < 0;
-      if (i >= 0) { var it = look.design.items[i]; setHint('ลากเพื่อย้าย' + (it ? D.ITEMS[it.k].name : '') + ' หรือใช้ปุ่มหมุน ย่อ ขยาย ลบ'); }
+      if (i >= 0) { var it = look.design.items[i]; setHint('ลากเพื่อเลื่อน' + (it ? D.ITEMS[it.k].name : '') + ' ไปซ้าย ขวา หน้า หลัง ⬆⬇ ปรับความสูง'); }
       else if (!tool) setHint('');
     }
     function setTool(t, label) {
@@ -325,6 +325,9 @@
       box.appendChild(g);
       var row = el('div', 'lkw-chips'); row.style.marginTop = '10px';
       row.appendChild(el('span', 'lkw-note', 'ติดแล้ว ' + look.design.items.length + '/' + D.MAX_ITEMS + ' ชิ้น แตะของบนกระทงเพื่อย้ายหรือแก้'));
+      row.appendChild(btn('lkw-chip', look.design.noCandle ? '🕯️ ใส่เทียนกลางกลับ' : '🕯️ เอาเทียนกลางออก', function () {
+        look.design.noCandle = !look.design.noCandle; changed(); render();
+      }));
       if (look.design.items.length) row.appendChild(btn('lkw-chip', 'ล้างทั้งหมด', function () { look.design.items = []; table.select(-1); showEdit(-1); changed(); render(); }));
       box.appendChild(row);
       return box;

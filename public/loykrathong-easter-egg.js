@@ -1562,6 +1562,7 @@
       var flameCore = new THREE.Mesh(geoCache.flame, mats.flame); flameCore.name = 'core'; flameCore.position.set(cx, top + 0.71, cz); g.add(flameCore);
       var flame = sprite(flameTex, 0xffffff, 1.1, 1); flame.name = 'flame'; flame.position.set(cx, top + 0.73, cz); g.add(flame);
       var halo = sprite(softTex, 0xff9a3c, 3.4, 0.35); halo.name = 'halo'; halo.position.set(cx, top + 0.65, cz); g.add(halo);
+      if (d && d.noCandle) { candle.visible = false; flameCore.visible = false; flame.visible = false; halo.visible = false; }
 
       // coins resting on the rim - the kids swim over to collect them (one merged mesh, placed where they aim)
       var coins = new THREE.Group(); coins.name = 'coins';
@@ -1769,6 +1770,7 @@
           var o = hits[i].object;
           if (!realMesh(o)) continue;
           for (var p = o; p && p !== st8.k; p = p.parent) if (p.userData.itemIndex != null) return p.userData.itemIndex;
+          if (o.isSprite) continue;   // the candle's glow and flame are see-through: look past them
           return -1;   // the krathong itself is in front
         }
         return -1;
@@ -1804,10 +1806,19 @@
         if (!dr) return;
         if (Math.abs(e.clientX - dr.x) + Math.abs(e.clientY - dr.y) > 6) dr.moved = true;
         if (!dr.moved) return;
-        if (dr.idx >= 0) {   // drag an item over the krathong
+        if (dr.idx >= 0) {   // drag an item: it slides level at its own height (lift and lower with the buttons)
           setNdc(e);
-          var p = pickSurface(), it = st8.look.design.items[dr.idx], o = itemObj(dr.idx);
-          if (p && it && o) { it.p = within(p).map(function (v) { return Math.round(v * 100) / 100; }); o.position.set(it.p[0], it.p[1], it.p[2]); updateRing(); }
+          var it = st8.look.design.items[dr.idx], o = itemObj(dr.idx);
+          if (it && o) {
+            var wpos = st8.k.localToWorld(tmpV.set(it.p[0], it.p[1], it.p[2]));
+            var hitP = new THREE.Vector3();
+            if (ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -wpos.y), hitP)) {
+              var lp = st8.k.worldToLocal(hitP), rr = Math.sqrt(lp.x * lp.x + lp.z * lp.z);
+              if (rr > 1.8) { lp.x *= 1.8 / rr; lp.z *= 1.8 / rr; }   // stay on (or just over the edge of) the krathong
+              it.p = [Math.round(lp.x * 100) / 100, it.p[1], Math.round(lp.z * 100) / 100];
+              o.position.set(it.p[0], it.p[1], it.p[2]); updateRing();
+            }
+          }
         } else {             // spin the krathong on the board
           st8.yaw = dr.yaw + (e.clientX - dr.x) * 0.012;
         }

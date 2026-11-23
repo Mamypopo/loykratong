@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const D = require('../public/design.js');
 
 const tri = [[0.5, 1], [0, 0], [1, 0]];
-const DEF = { v: 2, base: 6, material: 0, trunk: 0.4, leaf: null, leafColor: 0, petals: 11, flowers: 0, items: [], doodles: [] };
+const DEF = { v: 2, base: 6, material: 0, noCandle: false, trunk: 0.4, leaf: null, leafColor: 0, petals: 11, flowers: 0, items: [], doodles: [] };
 
 test('sanitize fills defaults and keeps valid choices', () => {
   assert.deepEqual(D.sanitize({}), DEF);
@@ -117,4 +117,10 @@ test('petals: more colours and materials than banana leaf, and 0 means no petals
   assert.equal(D.sanitize({ petals: 0 }).petals, 0);
   assert.equal(D.sanitize({ petals: 3 }).petals, D.PETALS_MIN);
   assert.equal(D.sanitize({ petals: -2 }).petals, 0);
+});
+
+test('noCandle: only a real true removes the centre candle', () => {
+  assert.equal(D.sanitize({ noCandle: true }).noCandle, true);
+  assert.equal(D.sanitize({ noCandle: 'yes' }).noCandle, false);
+  assert.equal(D.sanitize({}).noCandle, false);
 });

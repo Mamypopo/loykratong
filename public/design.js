@@ -143,6 +143,7 @@
       v: 2,
       base: pick(d.base, BASES.length, CUSTOM_BASE),
       material: pick(d.material, MATERIALS.length, 0),
+      noCandle: d.noCandle === true,   // the centre candle taken away (candles can still be stuck on as items)
       trunk: clamp(d.trunk, TRUNK_MIN, TRUNK_MAX, TRUNK_DEFAULT),
       leaf: cleanLeaf(d.leaf),
       leafColor: pick(d.leafColor, LEAF_COLORS.length, 0),
