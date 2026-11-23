@@ -40,6 +40,9 @@
     // หรือ object { load: function (limit) -> Promise<[{name, wish}]>, save: function ({name, wish}) -> Promise }
     wishFeed: null,
     wishFeedEvery: [6000, 10000],  // สุ่มลอยคำอธิษฐานของคนอื่นทุกกี่ ms
+    wishPollMs: null,       // ถาม API หากระทงใหม่ทุกกี่ ms (null = 5000, จอใหญ่ 3000)
+    onFeed: null,           // function ({ count }) ทุกครั้งที่ดึง feed สำเร็จ (ใช้กับตัวนับบนจอใหญ่)
+    screen: false,          // โหมดจอใหญ่: ไม่มีช่องพิมพ์/ปุ่มปิด, ลอยกระทงใหม่ของทุกคน
     wishReturnChance: 0.6,  // โอกาสที่กระทง+คำอธิษฐานที่ลอยหายไปแล้วจะสุ่มลอยกลับมาอีก (0–1, ลดลงทุกรอบ)
     demo: false,            // โหมดเดโม: เล่นอัตโนมัติ (ลอยกระทง+คำอธิษฐานตัวอย่าง) ไม่สนวันที่/ไม่บันทึกว่าเคยดู
     onClose: null,
@@ -112,6 +115,8 @@
 
   // wish feed adapter: a URL string or { load, save }
   function clip(s, n) { return String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n); }
+  // load(limit) -> Promise<{ count: number|null, wishes: [{ id?, name, wish }] }>
+  // save(entry) -> Promise<{ ok: boolean, status: number, error?: string, id?: string }>
   function makeFeed(cfg) {
     if (!cfg) return null;
     if (typeof cfg === 'string') {
@@ -120,15 +125,52 @@
         load: function (limit) {
           return fetch(url + (url.indexOf('?') >= 0 ? '&' : '?') + 'limit=' + limit, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
             .then(function (r) { return r.ok ? r.json() : []; })
-            .then(function (d) { return Array.isArray(d) ? d : (d && d.wishes) || []; });
+            .then(function (d) {
+              return Array.isArray(d) ? { count: null, wishes: d } : { count: d && typeof d.count === 'number' ? d.count : null, wishes: (d && d.wishes) || [] };
+            });
         },
         save: function (entry) {
-          return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) });
+          return fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) })
+            .then(function (r) {
+              return r.json().catch(function () { return {}; }).then(function (b) {
+                return { ok: r.ok, status: r.status, error: b && b.error, id: b && b.id };
+              });
+            });
         }
       };
     }
-    if (typeof cfg.load === 'function') return cfg;
+    if (typeof cfg.load === 'function') {   // custom adapter: accept a plain array too
+      return {
+        load: function (limit) {
+          return Promise.resolve(cfg.load(limit)).then(function (d) { return Array.isArray(d) ? { count: null, wishes: d } : d || { count: null, wishes: [] }; });
+        },
+        save: function (entry) {
+          return Promise.resolve(cfg.save ? cfg.save(entry) : null).then(function (r) { return r && typeof r.ok === 'boolean' ? r : { ok: true, status: 200 }; });
+        }
+      };
+    }
     return null;
+  }
+
+  // Sort a feed batch into wishes never seen before (fresh: float them next, oldest first, at most 30)
+  // and ones seen earlier (pool: float again at random). Own wishes are skipped by id, never by name.
+  var FRESH_MAX = 30;
+  var MSG_BLOCKED = 'ขอคำอธิษฐานที่สุภาพหน่อยนะ 🙏';
+  var MSG_TOO_FAST = 'ลอยถี่ไปนิด รอสักครู่นะ';
+  var MSG_SHARED = '🪷 กระทงของคุณลอยไปให้เพื่อนๆ เห็นแล้ว';
+  function mergeFeed(state, list) {
+    var fresh = [], pool = [];
+    (list || []).forEach(function (e) {
+      var item = { id: e && e.id != null ? String(e.id) : '', name: clip(e && e.name, 40), wish: clip(e && e.wish, 80) };
+      if (!item.wish) return;
+      var key = item.id || item.name + '|' + item.wish;
+      if (state.mine[key]) return;
+      if (state.seen[key]) pool.push(item);
+      else { state.seen[key] = 1; fresh.push(item); }
+    });
+    fresh.reverse();   // API order is newest first
+    if (fresh.length > FRESH_MAX) fresh = fresh.slice(fresh.length - FRESH_MAX);
+    return { fresh: fresh, pool: pool };
   }
 
   // folder this script was loaded from (to find semed-logo.png next to it)
@@ -247,6 +289,7 @@
     '.lk-egg .lk-name-input:focus{background:rgba(255,255,255,.18);box-shadow:0 0 0 2px rgba(255,226,122,.6)}',
     '.lk-name-edit{opacity:.75;font-size:12px;margin-right:6px}',
     '@media (max-height:500px){.lk-name-row{flex:none;padding-left:10px}.lk-egg .lk-name-input{width:6.5em}.lk-name-row>span:first-child{display:none}}',
+    '.lk-screen .lk-bottom,.lk-screen .lk-close{display:none}',
     '.lk-share-note{font-size:11.5px;color:#d9cff7;opacity:.85;text-align:center;margin-top:-4px}',
     '@media (max-height:500px){.lk-share-note{display:none}}',
     '.lk-label{position:absolute;left:0;top:0;transform-origin:50% 100%;will-change:transform,opacity;opacity:0}',
@@ -2291,12 +2334,12 @@
     if (opts.demo && !(options && options.enterLabel)) opts.enterLabel = 'ออกจากโหมดเดโม';
     injectCSS(); loadFont();
 
-    var tier = resolveTier(opts.quality);
+    var tier = resolveTier(opts.screen && opts.quality === 'auto' ? 'high' : opts.quality);
     var reduced = false;
     try { reduced = global.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { /* ignore */ }
 
     var root = document.createElement('div');
-    root.className = 'lk-egg' + (tier === 'low' ? ' lk-lowfx' : '');
+    root.className = 'lk-egg' + (tier === 'low' ? ' lk-lowfx' : '') + (opts.screen ? ' lk-screen' : '');
     root.setAttribute('data-quality', tier);
     root.setAttribute('role', 'dialog');
     root.setAttribute('aria-modal', 'true');
@@ -2332,7 +2375,7 @@
       '<button type="button" class="lk-sound"></button>' +
       '<button type="button" class="lk-close" aria-label="ปิด">✕</button>';
 
-    root.querySelector('.lk-hello').textContent = opts.userName ? 'ยินดีต้อนรับ คุณ' + opts.userName : 'ยินดีต้อนรับ';
+    root.querySelector('.lk-hello').textContent = opts.screen ? 'ร่วมลอยกระทงด้วยกัน' : opts.userName ? 'ยินดีต้อนรับ คุณ' + opts.userName : 'ยินดีต้อนรับ';
     var nameInput = root.querySelector('.lk-name-input');
     nameInput.value = clip(opts.userName, 40);
     nameInput.addEventListener('keydown', function (e) {   // Enter jumps to the wish box
@@ -2384,33 +2427,45 @@
       setTimeout(function () { if (p.parentNode) p.parentNode.removeChild(p); }, 1000);
     }
 
-    // other users' wishes: fetch a random batch, float one every few seconds, refetch when used up
+    // other users' wishes: poll the feed; wishes nobody has floated here yet go first (a few seconds apart),
+    // otherwise float a random earlier wish every wishFeedEvery ms
     var feed = opts.demo ? null : makeFeed(opts.wishFeed);
-    var myNames = {}, myWishes = [], feedQueue = [], feedTimer = null, feedBusy = false, feedNextFetch = 0;
-    if (feed) root.querySelector('.lk-share-note').hidden = false;
+    var feedState = { seen: {}, mine: {} }, freshQueue = [], pool = [], feedTimer = null, pollTimer = null, firstFetch = true;
+    var pollMs = opts.wishPollMs || (opts.screen ? 3000 : 5000);
+    var freshGap = opts.screen ? 1500 : 2500, lastFloat = 0, nextRandomAt = 0;
+    if (feed && !opts.screen) root.querySelector('.lk-share-note').hidden = false;
+    function randomGap() { var lo = opts.wishFeedEvery[0], hi = opts.wishFeedEvery[1]; return lo + Math.random() * Math.max(0, hi - lo); }
     function feedFetch() {
-      if (feedBusy || Date.now() < feedNextFetch) return;
-      feedBusy = true;
-      Promise.resolve(feed.load(20)).then(function (list) {
-        var sys = clip(opts.userName, 40); if (sys) myNames[sys] = 1;
-        feedQueue = (list || []).map(function (e) { return { name: clip(e && e.name, 40), wish: clip(e && e.wish, 80) }; })
-          .filter(function (e) { return e.wish && !(e.name && myNames[e.name]) && myWishes.indexOf(e.wish) < 0; });   // only other people's wishes
-        for (var i = feedQueue.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), tmp = feedQueue[i]; feedQueue[i] = feedQueue[j]; feedQueue[j] = tmp; }
+      Promise.resolve(feed.load(50)).then(function (d) {
+        var m = mergeFeed(feedState, d && d.wishes);
+        if (firstFetch) {   // wishes from before we opened: keep for random floats, show only the newest few now
+          firstFetch = false;
+          pool = m.fresh.slice();
+          freshQueue = m.fresh.slice(-3);
+        } else {
+          freshQueue = freshQueue.concat(m.fresh);
+          if (freshQueue.length > FRESH_MAX) freshQueue = freshQueue.slice(freshQueue.length - FRESH_MAX);
+          if (m.pool.length || m.fresh.length) pool = m.pool.concat(m.fresh);
+        }
+        if (typeof opts.onFeed === 'function' && d && typeof d.count === 'number') opts.onFeed({ count: d.count });
       }).catch(function () { /* feed unavailable: just skip */ }).then(function () {
-        feedBusy = false; feedNextFetch = Date.now() + 30000;
+        if (!closed) pollTimer = setTimeout(feedFetch, document.hidden ? pollMs * 4 : pollMs);
       });
     }
+    function floatWish(e) { scene.launchFront({ name: e.name || 'เพื่อนในระบบ', wish: e.wish, other: true }); }
     function feedLoop() {
       if (closed) return;
-      if (scene && !document.hidden && feedQueue.length) {
-        var e = feedQueue.shift();
-        scene.launchFront({ name: e.name || 'เพื่อนในระบบ', wish: e.wish, other: true });
+      var now = Date.now();
+      if (scene && !document.hidden) {
+        if (freshQueue.length && now - lastFloat >= freshGap) {
+          floatWish(freshQueue.shift()); lastFloat = now; nextRandomAt = now + randomGap();
+        } else if (!freshQueue.length && pool.length && now >= nextRandomAt) {
+          floatWish(pool[Math.floor(Math.random() * pool.length)]); lastFloat = now; nextRandomAt = now + randomGap();
+        }
       }
-      if (!feedQueue.length) feedFetch();
-      var lo = opts.wishFeedEvery[0], hi = opts.wishFeedEvery[1];
-      feedTimer = setTimeout(feedLoop, lo + Math.random() * Math.max(0, hi - lo));
+      feedTimer = setTimeout(feedLoop, 500);
     }
-    function startFeed() { if (!feed) return; feedFetch(); feedTimer = setTimeout(feedLoop, 4500); }
+    function startFeed() { if (!feed) return; nextRandomAt = Date.now() + 4500; feedFetch(); feedTimer = setTimeout(feedLoop, 2500); }
 
     // demo mode: autopilot that keeps launching wish krathongs and tapping the water
     var demoTimers = [];
@@ -2443,7 +2498,7 @@
     }
 
     function onResize() { if (scene) scene.resize(); }
-    function onKey(e) { if (e.key === 'Escape') close(); }
+    function onKey(e) { if (e.key === 'Escape' && !opts.screen) close(); }
     function onCanvasClick(e) { if (scene && scene.launchAt(e.clientX, e.clientY)) toast('🪷 ลอยทุกข์ ลอยโศก ไปกับสายน้ำ'); }
 
     function close() {
@@ -2451,7 +2506,7 @@
       root.classList.remove('lk-in');
       if (audio) audio.stop();
       demoTimers.forEach(clearTimeout);
-      clearTimeout(feedTimer);
+      clearTimeout(feedTimer); clearTimeout(pollTimer);
       global.removeEventListener('resize', onResize);
       document.removeEventListener('keydown', onKey);
       setTimeout(function () {
@@ -2469,10 +2524,17 @@
       var input = this.querySelector('input');
       var wish = clip(input.value, 80);
       var shownName = clip(nameInput.value, 40);   // what the person typed (prefilled from the system)
-      if (shownName) myNames[shownName] = 1;
+      var filter = global.LoyKrathongFilter;
+      if (filter && ((wish && !filter.check(wish).ok) || (shownName && !filter.check(shownName).ok))) {
+        toast(MSG_BLOCKED); input.focus(); return;   // keep the text so it can be edited
+      }
       if (feed && wish) {   // share it so other users may see it
-        myWishes.push(wish);
-        try { Promise.resolve(feed.save({ name: shownName, wish: wish })).catch(function () {}); } catch (err) { /* ignore */ }
+        Promise.resolve(feed.save({ name: shownName, wish: wish })).then(function (r) {
+          if (closed || !r) return;
+          if (r.ok) { if (r.id) feedState.mine[r.id] = 1; setTimeout(function () { if (!closed) toast(MSG_SHARED); }, 1800); }
+          else if (r.status === 422) toast(MSG_BLOCKED);
+          else if (r.status === 429) toast(MSG_TOO_FAST);
+        }).catch(function () { /* offline: it still floats on this screen */ });
       }
       if (scene) scene.launchFront({ name: shownName || 'ไม่ระบุชื่อ', wish: wish });
       if (!wish || !scene) toast(wish ? '✨ ' + wish : '🪷 ขอให้มีความสุขตลอดปี');
@@ -2544,6 +2606,7 @@
     stats: function () { return active ? active.stats() : null; },   // { tier, pixelRatio, bloom, fpsCap, fps, degradeSteps }
     isSeason: isLoyKrathongSeason,
     festivalDate: function (year) { return festivalDate(year || new Date().getFullYear()); },
-    preload: preload
+    preload: preload,
+    _mergeFeed: mergeFeed   // exposed for tests
   };
 })(window);
