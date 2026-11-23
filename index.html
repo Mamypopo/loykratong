@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Loy Krathong Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#f3f1fa; --card:#fff; --text:#241a3d; --muted:#6c6488; --accent:#5b3fc4; --border:#ddd8ef; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { --bg:#120d24; --card:#1d1736; --text:#efeaff; --muted:#a79fc6; --accent:#9d85ff; --border:#332a55; }
+    }
+    :root[data-theme="dark"] { --bg:#120d24; --card:#1d1736; --text:#efeaff; --muted:#a79fc6; --accent:#9d85ff; --border:#332a55; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:16px; background:var(--bg); color:var(--text); font-family:"Mitr",system-ui,sans-serif; }
+    .card { width:100%; max-width:380px; background:var(--card); border:1px solid var(--border); border-radius:18px; padding:32px 28px; box-shadow:0 12px 40px rgba(40,20,90,.12); }
+    h1 { margin:0 0 4px; font-size:24px; font-weight:500; }
+    p { margin:0 0 24px; color:var(--muted); font-size:14px; }
+    label { display:block; font-size:14px; margin:0 0 6px; }
+    input { width:100%; font:inherit; padding:11px 14px; border-radius:10px; border:1px solid var(--border); background:transparent; color:inherit; margin-bottom:16px; }
+    input:focus { outline:2px solid var(--accent); outline-offset:1px; }
+    button { width:100%; font:inherit; padding:12px; border:0; border-radius:10px; background:var(--accent); color:#fff; cursor:pointer; }
+    .demo { margin-top:14px; display:flex; gap:8px; align-items:center; font-size:13px; color:var(--muted); }
+    .demo input { width:auto; margin:0; }
+    .ghost { margin-top:10px; background:transparent; color:var(--accent); border:1px solid var(--border); }
+    .home { display:none; text-align:center; }
+    .home.on { display:block; }
+    .note { margin-top:18px; font-size:12px; color:var(--muted); }
+  </style>
+</head>
+<body>
+  <form class="card" id="login">
+    <h1>เข้าสู่ระบบ</h1>
+    <p>ตัวอย่างหน้า login สำหรับทดสอบ easter egg</p>
+    <label for="u">ชื่อผู้ใช้</label>
+    <input id="u" name="u" autocomplete="username" value="สมใจ" required>
+    <label for="pw">รหัสผ่าน</label>
+    <input id="pw" name="pw" type="password" autocomplete="current-password" value="demo1234" required>
+    <button type="submit">เข้าสู่ระบบ</button>
+    <button type="button" class="ghost" id="demoBtn">▶ โหมดเดโม</button>
+    <label class="demo"><input type="checkbox" id="force" checked> บังคับแสดง easter egg (โหมดทดสอบ)</label>
+    <div class="note" id="season"></div>
+  </form>
+
+  <div class="card home" id="home">
+    <h1>หน้าหลัก</h1>
+    <p id="welcome"></p>
+    <button type="button" id="again">ดู easter egg อีกครั้ง</button>
+  </div>
+
+  <script src="loykrathong-easter-egg.js"></script>
+  <script>
+    var egg = window.LoyKrathongEasterEgg;
+    var y = new Date().getFullYear();
+    document.getElementById('season').textContent =
+      'วันลอยกระทงปี ' + (y + 543) + ': ' + egg.festivalDate(y) + (egg.isSeason() ? ' — อยู่ในช่วงเทศกาล 🎉' : ' — ยังไม่ถึงช่วงเทศกาล');
+    egg.preload(); // warm up Three.js while the user types
+
+    function goHome(name) {
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('home').classList.add('on');
+      document.getElementById('welcome').textContent = 'ยินดีต้อนรับ คุณ' + name;
+    }
+
+    document.getElementById('login').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = document.getElementById('u').value.trim();
+      // ...ตรวจสอบสิทธิ์กับ backend จริงตรงนี้...
+      egg.maybeShow({
+        wishFeed: '/api/wishes',   // คำอธิษฐานที่แชร์กับผู้ใช้อื่น (ดู wish-server.js)
+        userName: name,
+        force: document.getElementById('force').checked,
+        onClose: function () { goHome(name); }
+      });
+    });
+
+    // โหมดเดโม: กดปุ่ม หรือเปิด URL ?loykrathong=demo
+    document.getElementById('demoBtn').addEventListener('click', function () { egg.demo(); });
+    if (/[?&]loykrathong=demo\b/.test(location.search)) egg.demo();
+
+    document.getElementById('again').addEventListener('click', function () {
+      egg.show({ userName: document.getElementById('u').value.trim(), enterLabel: 'กลับหน้าหลัก' });
+    });
+  </script>
+</body>
+</html>

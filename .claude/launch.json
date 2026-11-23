@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "loykrathong", "runtimeExecutable": "node", "runtimeArgs": ["wish-server.js"], "port": 5173 }
+  ]
+}

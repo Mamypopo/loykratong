@@ -1,0 +1,5 @@
+node_modules
+.vercel
+wishes.json*
+.env*
+.superpowers/
