@@ -1776,6 +1776,23 @@
         }
         return -1;
       }
+      // the item whose centre is nearest the finger on screen, within a finger's width (flat things like a fried
+      // egg sit half inside the krathong, so a ray often hits the krathong first)
+      var projV = new THREE.Vector3();
+      function pickItemNear(e) {
+        if (!st8.k) return -1;
+        var r = canvas.getBoundingClientRect(), best = -1, bd = 44 * 44;
+        st8.k.children.forEach(function (c) {
+          if (c.userData.itemIndex == null) return;
+          c.getWorldPosition(projV); projV.y += 0.12 * c.scale.y;
+          projV.project(cam);
+          if (projV.z > 1) return;
+          var dx = (projV.x * 0.5 + 0.5) * r.width + r.left - e.clientX, dy = (-projV.y * 0.5 + 0.5) * r.height + r.top - e.clientY;
+          var dd = dx * dx + dy * dy;
+          if (dd < bd) { bd = dd; best = c.userData.itemIndex; }
+        });
+        return best;
+      }
       // a point on the krathong body (not on items) in the krathong's own coordinates
       function pickSurface() {
         if (!st8.k) return null;
@@ -1796,6 +1813,7 @@
         setNdc(e);
         if (st8.mode === 'cut') { st8.drag = { cut: true }; moveKnife(e); return; }
         var hit = st8.tool || st8.view ? -1 : pickItem();
+        if (hit < 0 && !st8.tool && !st8.view) hit = pickItemNear(e);
         // an item already selected moves wherever you drag on the table, so you never have to hit it exactly;
         // with nothing selected, a drag spins the krathong
         var idx = hit >= 0 ? hit : st8.tool || st8.view ? -1 : st8.sel;
