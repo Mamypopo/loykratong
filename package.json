@@ -1,0 +1,10 @@
+{
+  "name": "loykrathong-online",
+  "private": true,
+  "type": "commonjs",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\"",
+    "dev": "node wish-server.js"
+  }
+}

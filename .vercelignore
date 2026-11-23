@@ -1,0 +1,6 @@
+docs
+tests
+.superpowers
+.claude
+wish-server.js
+wishes.json*
