@@ -305,12 +305,31 @@
     '.lk-sub{display:flex;align-items:center;justify-content:center;gap:12px;font-size:clamp(12px,1.9vw,16px);opacity:0;color:#f1e6ff;letter-spacing:3px;text-shadow:0 2px 8px rgba(0,0,0,.5);animation:lk-fade .8s 2s ease both}',
     '.lk-sub::before,.lk-sub::after{content:"";width:clamp(24px,6vw,70px);height:1.5px;background:linear-gradient(90deg,transparent,#ffd86b)}',
     '.lk-sub::after{transform:scaleX(-1)}',
-    '.lk-bottom{display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;max-width:560px;opacity:0;animation:lk-rise .9s 2.3s cubic-bezier(.2,1.2,.4,1) both}',
+    '.lk-bottom{display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:640px;opacity:0;animation:lk-rise .9s 2.3s cubic-bezier(.2,1.2,.4,1) both}',
     '.lk-hint{font-size:13px;color:#efe8ff;text-align:center;text-shadow:0 1px 6px rgba(0,0,0,.6);padding:4px 14px;border-radius:999px;background:rgba(20,8,60,.42);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}',
-    '@media (max-height:500px){.lk-ui{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:max(10px,env(safe-area-inset-bottom))}.lk-title{margin-top:0}.lk-hello{font-size:12px;padding:3px 12px}.lk-title h1{margin:.35em 0 2px;font-size:clamp(24px,9vh,46px)}.lk-sub{font-size:11px}.lk-hint{display:none}.lk-bottom{flex-direction:row;max-width:700px;gap:10px}.lk-wish{flex:1}.lk-egg .lk-btn-enter{padding:10px 18px;font-size:14px}.lk-toast{top:50%}}',
-    '.lk-wish{pointer-events:auto;display:flex;gap:8px;width:100%;background:linear-gradient(135deg,rgba(60,30,130,.55),rgba(20,8,60,.55));border:1.5px solid rgba(255,226,122,.6);border-radius:999px;padding:6px;box-shadow:0 8px 28px rgba(10,0,40,.45),inset 0 1px 0 rgba(255,255,255,.2)}',
-    '.lk-egg .lk-wish input{flex:1;min-width:0;width:auto;background:transparent;border:0;outline:0;color:#fff;font:inherit;font-size:15px;padding:0 14px}',
-    '.lk-wish input::placeholder{color:#c4b5f0}',
+    '@media (max-height:500px){.lk-ui{padding-top:max(10px,env(safe-area-inset-top));padding-bottom:max(10px,env(safe-area-inset-bottom))}.lk-title{margin-top:0}.lk-hello{font-size:12px;padding:3px 12px}.lk-title h1{margin:.35em 0 2px;font-size:clamp(24px,9vh,46px)}.lk-sub{font-size:11px}.lk-hint{display:none}.lk-bottom{max-width:700px}.lk-toast{top:50%}}',
+    '.lk-wish{pointer-events:auto;display:flex;align-items:center;gap:6px;width:100%;background:linear-gradient(135deg,rgba(60,30,130,.55),rgba(20,8,60,.55));border:1.5px solid rgba(255,226,122,.6);border-radius:999px;padding:6px;box-shadow:0 8px 28px rgba(10,0,40,.45),inset 0 1px 0 rgba(255,255,255,.2)}',
+    '.lk-egg .lk-wish-input{flex:1;min-width:0;width:auto;align-self:stretch;background:transparent;border:0;outline:0;color:#fff;font:inherit;font-size:15px;padding:0 10px}',
+    '.lk-egg .lk-wish-input::placeholder{color:#c4b5f0}',
+    // your krathong, waiting at the front of the dock
+    '.lk-egg .lk-seat{position:relative;flex:none;width:46px;height:46px;padding:0;border-radius:50%;border:2px solid rgba(255,226,122,.75);background:radial-gradient(circle at 50% 40%,#4a2a7a,#1b0d4d);cursor:pointer;overflow:visible;display:grid;place-items:center;font-size:22px;box-shadow:0 0 14px rgba(255,200,90,.35)}',
+    '.lk-egg .lk-seat[hidden]{display:none}',
+    '.lk-seat-pic{width:100%;height:100%;border-radius:50%;overflow:hidden;display:grid;place-items:center}',
+    '.lk-seat-pic img{width:100%;height:100%;object-fit:cover;display:block}',
+    '.lk-seat-tag{position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);font-size:10px;line-height:1;padding:2px 6px;border-radius:999px;background:#ffe27a;color:#4a1f6b;font-weight:500;white-space:nowrap}',
+    '.lk-egg .lk-seat:hover{border-color:#fff3b0}',
+    '.lk-egg .lk-seat:focus-visible{outline:3px solid #7bdff2;outline-offset:3px}',
+    // name: a quiet inline field, divided from the wish by a hairline
+    '.lk-egg .lk-wish .lk-name-row{flex:none;padding:0 10px 0 4px;border:0;border-right:1px solid rgba(255,226,122,.3);border-radius:0;background:none;gap:4px}',
+    '.lk-egg .lk-wish .lk-name-input{width:6.5em;padding:6px 4px;background:none}',
+    '.lk-egg .lk-wish .lk-name-input:focus{background:rgba(255,255,255,.1);box-shadow:none;border-radius:8px}',
+    '.lk-egg .lk-btn-enter{display:none}',
+    '.lk-egg .lk-topleft .lk-btn-gallery{pointer-events:auto;font-size:14px;padding:8px 14px;background:rgba(20,8,60,.55);color:#f1e6ff;border:1.5px solid rgba(255,226,122,.45);box-shadow:none}',
+    '.lk-egg .lk-topleft .lk-btn-gallery[hidden]{display:none}',
+    '.lk-making .lk-topleft{opacity:0;pointer-events:none}',
+    '.lk-screen .lk-topleft .lk-btn-gallery{display:none}',
+    // phones: name on its own line above the wish
+    '@media (max-width:600px){.lk-wish{flex-wrap:wrap;border-radius:24px;padding:8px;row-gap:8px}.lk-egg .lk-wish .lk-name-row{flex:1 1 calc(100% - 60px);border-right:0}.lk-egg .lk-wish .lk-name-input{width:100%;max-width:none}.lk-egg .lk-wish-input{flex:1 1 0;min-width:110px;padding:10px 12px;border-radius:999px;background:rgba(255,255,255,.08)}}',
     '.lk-egg .lk-btn{pointer-events:auto;font:inherit;font-weight:500;font-size:15px;border:0;border-radius:999px;cursor:pointer;padding:10px 18px;transition:transform .15s ease,box-shadow .15s ease,filter .15s ease;white-space:nowrap}',
     '.lk-egg .lk-btn:hover{filter:brightness(1.08)}',
     '.lk-btn:active{transform:translateY(2px)}',
@@ -353,8 +372,9 @@
     '@media (max-height:500px){.lk-name-row{flex:none;padding-left:10px}.lk-egg .lk-name-input{width:6.5em}.lk-name-row>span:first-child{display:none}}',
     '.lk-screen .lk-bottom,.lk-screen .lk-close{display:none}',
     '.lk-screen .lk-label-card{max-width:440px;padding:12px 26px 14px;border-radius:22px}.lk-screen .lk-label-name{font-size:clamp(14px,1.25vw,24px)}.lk-screen .lk-label-wish{font-size:clamp(18px,1.75vw,32px)}',
-    '.lk-quick{pointer-events:auto;display:flex;gap:6px;max-width:100%;overflow-x:auto;padding:2px 2px 4px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent)}',
+    '.lk-quick{pointer-events:auto;display:none;gap:6px;max-width:100%;overflow-x:auto;padding:2px 2px 4px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent)}',
     '.lk-quick::-webkit-scrollbar{display:none}',
+    '.lk-wishing .lk-quick{display:flex;animation:lk-fade .2s both}',
     '.lk-egg .lk-quick button{flex:none;font:inherit;font-size:13px;color:#fff6d6;cursor:pointer;padding:5px 12px;border-radius:999px;border:1.5px solid rgba(255,226,122,.45);background:rgba(20,8,60,.6)}',
     '.lk-egg .lk-quick button:hover{border-color:#ffe27a}',
     '.lk-egg .lk-quick button:focus-visible{outline:3px solid #7bdff2;outline-offset:2px}',
@@ -3387,34 +3407,35 @@
       '    <div class="lk-sub">HAPPY LOY KRATHONG ' + beYear + '</div>' +
       '  </div>' +
       '  <div class="lk-bottom">' +
-      '    <div class="lk-hint">พิมพ์คำอธิษฐาน หรือแตะคำอธิษฐานสำเร็จรูป แล้วกดลอยกระทง</div>' +
-      '    <div class="lk-mine"><button type="button" class="lk-btn lk-btn-make" hidden>✂️ ทำกระทงของฉัน</button>' +
-      '    <button type="button" class="lk-btn lk-btn-gallery" hidden>🏛 กระทงทุกคน</button></div>' +
-      '    <label class="lk-name-row"><span>ลอยในนาม</span>' +
-      '      <input class="lk-name-input" type="text" maxlength="40" placeholder="ไม่ระบุชื่อ" aria-label="ชื่อที่จะแสดงบนกระทง" autocomplete="nickname">' +
-      '      <span class="lk-name-edit" aria-hidden="true">✎</span></label>' +
       '    <div class="lk-quick" role="group" aria-label="คำอธิษฐานสำเร็จรูป"></div>' +
       '    <form class="lk-wish">' +
-      '      <input type="text" maxlength="80" placeholder="พิมพ์คำอธิษฐาน…" aria-label="คำอธิษฐาน (ต้องใส่ก่อนลอยกระทง)">' +
+      '      <button type="button" class="lk-seat lk-btn-make" hidden aria-label="เลือกหรือทำกระทงของฉัน" title="เลือกหรือทำกระทงของฉัน">' +
+      '        <span class="lk-seat-pic" aria-hidden="true">🎲</span><span class="lk-seat-tag" aria-hidden="true">เปลี่ยน</span></button>' +
+      '      <label class="lk-name-row" title="ชื่อที่จะแสดงบนกระทง">' +
+      '        <input class="lk-name-input" type="text" maxlength="40" placeholder="ชื่อ" aria-label="ชื่อที่จะแสดงบนกระทง (ไม่ใส่ก็ได้)" autocomplete="nickname">' +
+      '        <span class="lk-name-edit" aria-hidden="true">✎</span></label>' +
+      '      <input class="lk-wish-input" type="text" maxlength="80" placeholder="พิมพ์คำอธิษฐาน…" aria-label="คำอธิษฐาน (ต้องใส่ก่อนลอยกระทง)">' +
       '      <button type="submit" class="lk-btn lk-btn-float">ลอยกระทง</button>' +
       '    </form>' +
-      '    <div class="lk-share-note" hidden>คำอธิษฐานของคุณจะลอยไปให้เพื่อนๆ ในระบบเห็นแบบสุ่ม</div>' +
       '    <button type="button" class="lk-btn lk-btn-enter"></button>' +
       '  </div>' +
       '</div>' +
       '<div class="lk-topleft">' +
       (opts.demo ? '  <div class="lk-demo">โหมดเดโม</div>' : '') +
+      '  <button type="button" class="lk-btn lk-btn-gallery" hidden>🏛 กระทงทุกคน</button>' +
       '</div>' +
       '<button type="button" class="lk-sound"></button>' +
-      '<button type="button" class="lk-close" aria-label="ปิด">✕</button>';
+      '<button type="button" class="lk-close" aria-label="ปิด" title="ปิด">✕</button>';
 
     root.querySelector('.lk-hello').textContent = opts.screen ? 'ร่วมลอยกระทงด้วยกัน' : opts.userName ? 'ยินดีต้อนรับ คุณ' + opts.userName : 'ยินดีต้อนรับ';
     var nameInput = root.querySelector('.lk-name-input');
     nameInput.value = clip(opts.userName, 40);
     nameInput.addEventListener('keydown', function (e) {   // Enter jumps to the wish box
-      if (e.key === 'Enter') { e.preventDefault(); root.querySelector('.lk-wish input').focus(); }
+      if (e.key === 'Enter') { e.preventDefault(); root.querySelector('.lk-wish-input').focus(); }
     });
     root.querySelector('.lk-btn-enter').textContent = opts.enterLabel + ' →';
+    root.querySelector('.lk-close').setAttribute('aria-label', opts.enterLabel);   // the ✕ is the way out
+    root.querySelector('.lk-close').title = opts.enterLabel;
     (opts.container || document.body).appendChild(root);
     // lock page scroll behind the overlay (restored on close)
     var htmlEl = document.documentElement, prevOverflow = htmlEl.style.overflow;
@@ -3478,7 +3499,6 @@
     root.addEventListener("pointerdown", function () { lastInput = Date.now(); }, true);
     root.addEventListener("keydown", function () { lastInput = Date.now(); }, true);
     var freshGap = opts.screen ? 1500 : 2500, lastFloat = 0;
-    if (feed && !opts.screen) root.querySelector('.lk-share-note').hidden = false;
     function feedFetch() {
       Promise.resolve(feed.load(50)).then(function (d) {
         var m = mergeFeed(feedState, d && d.wishes);
@@ -3522,11 +3542,24 @@
     var shelf = mineOk ? SH.createShelf((function () { try { return global.localStorage; } catch (e) { return null; } })()) : null;
     var myLook = null, myKid = null;
     var makeBtn = root.querySelector('.lk-btn-make'), galleryBtn = root.querySelector('.lk-btn-gallery');
-    var floatBtn = root.querySelector('.lk-btn-float'), hintEl = root.querySelector('.lk-hint'), wishInput = root.querySelector('.lk-wish input');
+    var floatBtn = root.querySelector('.lk-btn-float'), wishInput = root.querySelector('.lk-wish-input');
+    var seatPic = root.querySelector('.lk-seat-pic'), seatTag = root.querySelector('.lk-seat-tag'), seatKey = null;
+    // the dock's seat shows the krathong you will float (a picture of it), or a die for a random one
+    function renderSeat() {
+      var key = myLook ? myKid + ':' + ((shelf && shelf.get(myKid) || {}).at || 0) : 'random';
+      if (key === seatKey) return;
+      seatKey = key;
+      seatTag.textContent = shelf && shelf.items().length ? 'เปลี่ยน' : 'ทำเอง';
+      if (!myLook) { seatPic.textContent = '🎲'; return; }
+      seatPic.textContent = '🪷';
+      if (scene && scene.snapshot) scene.snapshot(myLook).then(function (url) {
+        if (!url || seatKey !== key) return;
+        seatPic.textContent = ''; var im = document.createElement('img'); im.alt = ''; im.src = url; seatPic.appendChild(im);
+      });
+    }
     function renderMine() {
       floatBtn.textContent = myLook ? 'ลอยกระทงของฉัน' : 'ลอยกระทง';
-      hintEl.textContent = myLook ? 'พิมพ์คำอธิษฐาน หรือแตะคำอธิษฐานสำเร็จรูป แล้วกดลอยกระทงของฉัน' : 'พิมพ์คำอธิษฐาน หรือแตะคำอธิษฐานสำเร็จรูป แล้วกดลอยกระทง';
-      if (shelf) makeBtn.textContent = shelf.items().length ? '🧺 กระทงของฉัน (' + shelf.items().length + ')' : '🧺 เลือก/ทำกระทง';
+      if (shelf) renderSeat();
     }
     // the float button works only once there is a wish
     function syncFloat() { floatBtn.disabled = !wishInput.value.trim(); }
@@ -3534,10 +3567,15 @@
     var quickEl = root.querySelector('.lk-quick');
     QUICK_WISHES.forEach(function (w) {
       var b = document.createElement('button'); b.type = 'button'; b.textContent = w;
-      b.addEventListener('click', function () { wishInput.value = w; syncFloat(); floatBtn.focus({ preventScroll: true }); });
+      b.addEventListener('pointerdown', function (e) { e.preventDefault(); });   // keep focus in the wish box so the row stays open
+      b.addEventListener('click', function () { wishInput.value = w; syncFloat(); wishInput.focus({ preventScroll: true }); });
       quickEl.appendChild(b);
     });
     syncFloat();
+    var wishForm = root.querySelector('.lk-wish');
+    wishInput.addEventListener('focus', function () { root.classList.add('lk-wishing'); });
+    wishInput.addEventListener('pointerdown', function () { root.classList.add('lk-wishing'); });
+    wishInput.addEventListener('blur', function () { root.classList.remove('lk-wishing'); });
     function syncLook() {
       var it = shelf && shelf.selected();
       myLook = it ? it.look : null; myKid = it ? it.kid : null;
@@ -3654,7 +3692,7 @@
 
     root.querySelector('.lk-wish').addEventListener('submit', function (e) {
       e.preventDefault();
-      var input = this.querySelector('input');
+      var input = wishInput;
       var wish = clip(input.value, 80);
       if (!wish) { toast('✍️ พิมพ์คำอธิษฐาน หรือแตะคำอธิษฐานสำเร็จรูปก่อนนะ'); input.focus(); syncFloat(); return; }
       var shownName = clip(nameInput.value, 40);   // what the person typed (prefilled from the system)
@@ -3711,6 +3749,7 @@
             }
           });
           if (opts.demo) startDemo();
+          if (shelf) { seatKey = null; renderSeat(); }   // now the scene can draw the krathong's picture
           startFeed();
         } catch (err) {
           fallback(); return;   // WebGL unavailable: keep the 2D greeting
@@ -3722,7 +3761,7 @@
             try { opts.onReady({ moonScreen: function () { return scene && scene.moonScreen ? scene.moonScreen() : null; } }); } catch (err) { /* ignore */ }
           }); });
         }
-        setTimeout(function () { var b = root.querySelector('.lk-btn-enter'); if (b && !closed) b.focus({ preventScroll: true }); }, 2400);
+        // no auto focus: on phones it would pop the keyboard over the river
       });
     }).catch(fallback);
 
