@@ -25,7 +25,7 @@ const { createMemoryStore } = require('./lib/memory-store.js');
 const PORT = Number(process.env.PORT) || 5173;
 const HOST = process.env.HOST || '127.0.0.1';
 const ROOT = path.join(__dirname, 'public');
-const PUBLIC = new Set(['index.html', 'app.js', 'filter.js', 'loykrathong-easter-egg.js', 'semed-logo.png', 'design.js', 'workshop.js', 'shelf.js', 'gallery.js']);
+const PUBLIC = new Set(['index.html', 'app.js', 'filter.js', 'loykrathong-easter-egg.js', 'semed-logo.png', 'design.js', 'workshop.js', 'shelf.js', 'gallery.js', 'lk-button.js', 'button.html', 'button-page.js']);
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.json': 'application/json'
 };
@@ -59,7 +59,7 @@ http.createServer((req, res) => {
 
   if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; return res.end(); }
   let name;
-  try { name = decodeURIComponent(url.pathname).replace(/^\/+/, '') || 'index.html'; } catch (e) { res.statusCode = 400; return res.end(); }
+  try { name = decodeURIComponent(url.pathname).replace(/^\/+/, '') || 'index.html'; if (name === 'button') name = 'button.html'; } catch (e) { res.statusCode = 400; return res.end(); }
   if (!PUBLIC.has(name)) { res.statusCode = 404; return res.end('Not found'); }
   fs.readFile(path.join(ROOT, name), (err, buf) => {
     if (err) { res.statusCode = 404; return res.end('Not found'); }

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ปุ่มลอยกระทงออนไลน์ สำหรับเว็บไซต์</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E🪷%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root { --ink:#1d1640; --muted:#6a6385; --line:#e6e1f3; --bg:#f7f5fc; --accent:#5b2bb5; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"Mitr", system-ui, sans-serif; color:var(--ink); background:var(--bg); line-height:1.6; }
+    header { padding:40px 20px 28px; text-align:center; color:#fff7e6;
+      background:radial-gradient(ellipse 60% 80% at 50% 0%, #3a1f7a, #160b3d 70%); }
+    header h1 { margin:0 0 6px; font-size:clamp(26px, 5vw, 38px); font-weight:600; color:#ffd56b; }
+    header p { margin:0; color:#d9cff7; }
+    main { max-width:980px; margin:0 auto; padding:28px 20px 120px; }
+    .setup { display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; padding:16px 18px; margin-bottom:26px; background:#fff; border:1px solid var(--line); border-radius:14px; }
+    .setup label { font-weight:500; }
+    .setup input { font:inherit; padding:8px 12px; border:1.5px solid var(--line); border-radius:10px; width:160px; }
+    .setup input:focus { outline:none; border-color:var(--accent); }
+    .setup small { color:var(--muted); flex-basis:100%; }
+    section.card { background:#fff; border:1px solid var(--line); border-radius:18px; margin-bottom:26px; overflow:hidden; }
+    .card h2 { margin:0; font-size:20px; font-weight:600; }
+    .card .head { padding:18px 20px 6px; }
+    .card .head p { margin:4px 0 0; color:var(--muted); font-size:14px; }
+    .stage { display:grid; grid-template-columns:1fr 1fr; }
+    .stage > div { min-height:150px; display:flex; align-items:center; justify-content:center; padding:26px 18px; }
+    .light { background:#ffffff; border-top:1px solid var(--line); }
+    .dark { background:#1f2430; border-top:1px solid var(--line); }
+    .stage .tag { position:absolute; }
+    .full { grid-column:1 / -1; }
+    .code { position:relative; margin:0; border-top:1px solid var(--line); background:#14102a; }
+    .code pre { margin:0; padding:16px 18px; padding-right:96px; overflow:auto; color:#e9e4ff; font:13px/1.6 ui-monospace, Consolas, monospace; white-space:pre-wrap; word-break:break-all; }
+    .copy { position:absolute; top:10px; right:10px; font:inherit; font-size:13px; padding:6px 12px; border-radius:8px; border:0; cursor:pointer; background:#ffc94a; color:#3d1763; font-weight:600; }
+    .copy:focus-visible { outline:3px solid #7bdff2; outline-offset:2px; }
+    .notes { background:#fff; border:1px solid var(--line); border-radius:18px; padding:18px 22px; }
+    .notes h2 { margin:0 0 6px; font-size:20px; font-weight:600; }
+    .notes ul { margin:0; padding-left:20px; }
+    .notes li { margin:4px 0; }
+    code { font-family:ui-monospace, Consolas, monospace; font-size:.92em; background:#efeaf9; padding:1px 6px; border-radius:6px; }
+    .mock { width:100%; max-width:420px; border-radius:12px; background:#fff; box-shadow:0 2px 12px rgba(20,10,60,.12); overflow:hidden; font-size:13px; color:#555; }
+    .mock .bar { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 14px; background:#24439b; color:#fff; font-weight:500; }
+    .mock .body { padding:14px; }
+    .mock .ln { height:8px; border-radius:4px; background:#e9e9ef; margin:8px 0; }
+    .mock.site { position:relative; max-width:520px; min-height:260px; }
+    .replay { font:inherit; font-size:13px; margin-top:12px; padding:6px 14px; border-radius:999px; border:1.5px solid var(--line); background:#fff; color:var(--accent); cursor:pointer; }
+    .replay:focus-visible { outline:3px solid #7bdff2; outline-offset:2px; }
+    .col { display:flex; flex-direction:column; align-items:center; width:100%; }
+    @media (max-width:700px) { .stage { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🪷 ปุ่มลอยกระทงออนไลน์</h1>
+    <p>ปุ่มมีแอนิเมชันสำหรับวางบนเว็บไซต์ ใส่โค้ดบรรทัดเดียว</p>
+  </header>
+
+  <main>
+    <div class="setup">
+      <label for="site">รหัสเว็บของคุณ</label>
+      <input id="site" value="siteA" maxlength="32" autocomplete="off" spellcheck="false">
+      <small>ใช้ a–z, 0–9, - และ _ เท่านั้น ใช้นับว่าผู้ใช้มาจากเว็บไหน ห้ามใส่ข้อมูลส่วนตัว</small>
+    </div>
+
+    <section class="card">
+      <div class="head">
+        <h2>1. ปุ่มแคปซูล (pill)</h2>
+        <p>วางในเนื้อหา เมนู หรือหน้าแรก ปุ่มจะขึ้นตรงจุดที่วางโค้ด</p>
+      </div>
+      <div class="stage">
+        <div class="light" id="pv-pill-light"></div>
+        <div class="dark" id="pv-pill-dark"></div>
+      </div>
+      <div class="code"><pre data-style="pill"></pre><button class="copy" type="button">คัดลอก</button></div>
+    </section>
+
+    <section class="card">
+      <div class="head">
+        <h2>2. แบนเนอร์ (banner)</h2>
+        <p>แถบกว้างสำหรับหน้าแรกหรือหน้าข่าว ปรับเป็นแนวตั้งเองบนมือถือ</p>
+      </div>
+      <div class="stage">
+        <div class="light full" id="pv-banner"></div>
+      </div>
+      <div class="code"><pre data-style="banner"></pre><button class="copy" type="button">คัดลอก</button></div>
+    </section>
+
+    <section class="card">
+      <div class="head">
+        <h2>3. ปุ่มลอยมุมจอ (floating)</h2>
+        <p>ลอยอยู่มุมขวาล่างของจอทุกหน้า บอกชื่อเองครั้งแรกแล้วหุบ ชี้เมาส์ที่ปุ่มเพื่อดูชื่ออีกครั้ง ผู้ใช้กด ✕ เพื่อซ่อนได้ รีเฟรชหรือเปลี่ยนหน้าแล้วปุ่มจะขึ้นใหม่</p>
+      </div>
+      <div class="stage">
+        <div class="light full">
+          <div class="col">
+            <div class="mock site" id="pv-floating"><div class="bar">เว็บ A <span>☰</span></div><div class="body"><div class="ln"></div><div class="ln" style="width:80%"></div><div class="ln" style="width:60%"></div><div class="ln" style="width:70%"></div><p style="margin:10px 0 0">ใส่โค้ดไว้ก่อน <code>&lt;/body&gt;</code> ปุ่มจะขึ้นทุกหน้า</p></div></div>
+            <button type="button" class="replay" id="replay">↻ เล่นตัวอย่างอีกครั้ง</button>
+          </div>
+        </div>
+      </div>
+      <div class="code"><pre data-style="floating"></pre><button class="copy" type="button">คัดลอก</button></div>
+    </section>
+
+    <div class="notes">
+      <h2>ข้อควรรู้</h2>
+      <ul>
+        <li>ปุ่มขึ้นเองเฉพาะวันลอยกระทง (ปี 2569 คือ 24 พ.ย.) วันอื่นปุ่มไม่แสดง จึงใส่โค้ดไว้ทั้งปีได้ ตัวอย่างในหน้านี้แสดงทุกวันเพื่อให้ดูได้</li>
+        <li>อยากให้ขึ้นก่อนวันงาน ใส่ <code>data-days-before="3"</code> ข้อความรองจะนับถอยหลังให้ เช่น "อีก 3 วัน", "พรุ่งนี้แล้ว" · อยากให้ขึ้นตลอดใส่ <code>data-show="always"</code></li>
+        <li>ทดสอบนอกช่วงเทศกาล: เปิดหน้าเว็บของคุณโดยต่อท้าย <code>?lkbtn=1</code></li>
+        <li>ปุ่มอยู่ใน Shadow DOM CSS ของเว็บไม่ทำให้ปุ่มเพี้ยน และปุ่มไม่กระทบหน้าเว็บ</li>
+        <li>เปิดเว็บลอยกระทงในแท็บใหม่ ผู้ใช้กด "ออกจากงาน" แล้วกลับมาหน้าเว็บเดิม ถ้าต้องการเปิดในแท็บเดิมใส่ <code>data-new-tab="0"</code></li>
+        <li>ใช้ฟอนต์ของเว็บแทน Mitr ใส่ <code>data-font="none"</code> · ปุ่มลอยไปฝั่งซ้ายใส่ <code>data-side="left"</code> · ยกให้สูงขึ้นใส่ <code>data-offset="90"</code></li>
+        <li>ใส่ปุ่มในกล่องที่ต้องการ: <code>data-target="#promo"</code></li>
+        <li>เว็บที่ตั้ง CSP ต้องอนุญาตโดเมนเว็บลอยกระทงใน <code>script-src</code> และ <code>fonts.googleapis.com</code> / <code>fonts.gstatic.com</code></li>
+        <li>ผู้ใช้ที่ตั้งค่าลดการเคลื่อนไหวในเครื่อง จะเห็นปุ่มนิ่ง ไม่มีแอนิเมชัน</li>
+      </ul>
+    </div>
+  </main>
+
+  <script src="button-page.js"></script>
+</body>
+</html>
