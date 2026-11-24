@@ -1,4 +1,4 @@
-/* ห้องจัดแสดงกระทงทุกคน: every krathong people made and floated, newest first.
+/* ห้องจัดแสดงกระทงทุกคน: every krathong people made and floated, newest first, with a podium of the 3 most-hearted on top.
  * Tap one to spin it on the workshop table (view only); give hearts to the ones you like (one per krathong per browser).
  * LoyKrathongGallery.open({ container, table, snapshot(look) -> Promise<url>, fetchLook(id) -> Promise<{design, photo}>,
  *                           base: '/api', client, toast, onClose })
@@ -35,6 +35,18 @@
     '.lkg .lkg-bigheart[aria-pressed="true"]{background:rgba(255,59,107,.35)}',
     '.lkg .lkg-tip{position:absolute;left:50%;transform:translateX(-50%);top:calc(max(12px,env(safe-area-inset-top)) + 56px);display:none;font-size:13px;color:#fff6d6;background:rgba(30,14,8,.6);padding:6px 14px;border-radius:999px}',
     '.lkg.lkg-viewing .lkg-tip{display:block}',
+    '.lkg .lkg-podium{max-width:560px;margin:4px auto 22px;text-align:center}',
+    '.lkg .lkg-podium h3{margin:0 0 10px;font-size:16px;font-weight:500;color:#ffe9a8}',
+    '.lkg .lkg-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;align-items:end}',
+    '.lkg .lkg-step{display:flex;flex-direction:column;gap:4px;min-width:0}',
+    '.lkg .lkg-step .lkg-pic{border:3px solid var(--medal);box-shadow:0 0 18px -4px var(--medal)}',
+    '.lkg .lkg-step .lkg-name{text-align:center}',
+    '.lkg .lkg-step .lkg-heart{align-self:center}',
+    '.lkg .lkg-block{border-radius:10px 10px 4px 4px;background:linear-gradient(var(--medal),rgba(255,255,255,.06));color:#2a1a10;font-weight:600;font-size:20px;line-height:1;padding:6px 0}',
+    '.lkg .lkg-r1{--medal:#ffd34d}.lkg .lkg-r1 .lkg-block{height:58px}',
+    '.lkg .lkg-r2{--medal:#d7dde6}.lkg .lkg-r2 .lkg-block{height:38px}',
+    '.lkg .lkg-r3{--medal:#e0995a}.lkg .lkg-r3 .lkg-block{height:24px}',
+    '.lkg .lkg-all{max-width:1100px;margin:0 auto 10px;font-size:15px;font-weight:500;color:#ffe9a8}',
     '.lkg :focus-visible{outline:2px solid #ffe07a;outline-offset:2px}'
   ].join('\n');
 
@@ -51,7 +63,7 @@
     close();
     if (!document.getElementById('lkg-css')) { var st = el('style'); st.id = 'lkg-css'; st.textContent = CSS; document.head.appendChild(st); }
     var toast = o.toast || function () {}, base = o.base || '/api';
-    var items = [], total = 0, loading = false, viewing = null, thumbs = {};
+    var items = [], total = 0, loading = false, viewing = null, thumbs = {}, top = [];
 
     var box = el('section', 'lkg'); box.setAttribute('aria-label', 'กระทงของทุกคน');
     var head = el('div', 'lkg-head');
@@ -77,6 +89,8 @@
         .then(function (d) {
           if (!d) { toast('ให้หัวใจไม่สำเร็จ ลองใหม่อีกทีนะ'); return; }
           it.hearts = d.hearts; markHearted(it.id);
+          items.concat(top).forEach(function (x) { if (x.id === it.id) x.hearts = d.hearts; });
+          rerank(it);
           b.textContent = heartLabel(it); b.setAttribute('aria-pressed', 'true');
           renderList();
         }).catch(function () { toast('ให้หัวใจไม่สำเร็จ ลองใหม่อีกทีนะ'); });
@@ -94,6 +108,37 @@
       });
     }
 
+    // podium: re-rank with the hearts we know now (no refetch), so a heart shows up at once;
+    // candidates in grid order (newest first) so ties go to the newer krathong, as on the server
+    function rerank(it) {
+      var all = {}, order = [];
+      items.concat(top, [it]).forEach(function (x) { if (!all[x.id]) { all[x.id] = x; order.push(x); } });
+      top = order.filter(function (x) { return (x.hearts || 0) > 0; })
+        .map(function (x, i) { return { x: x, i: i }; })
+        .sort(function (p, q) { return (q.x.hearts || 0) - (p.x.hearts || 0) || p.i - q.i; })
+        .slice(0, 3).map(function (e) { return e.x; });
+    }
+    function podium() {
+      var wrap = el('div', 'lkg-podium');
+      wrap.appendChild(el('h3', null, '🏆 กระทงขวัญใจ ใจเยอะที่สุด'));
+      var steps = el('div', 'lkg-steps');
+      [1, 0, 2].forEach(function (rank) {   // 2nd, 1st, 3rd: the winner stands in the middle
+        var it = top[rank], step = el('div', 'lkg-step lkg-r' + (rank + 1));
+        if (!it) { steps.appendChild(step); return; }
+        var pic = btn('lkg-pic', null, function () { view(it); }, 'อันดับ ' + (rank + 1) + ' กระทงของ ' + (it.name || 'ไม่ระบุชื่อ'));
+        thumb(it, pic);
+        step.appendChild(pic);
+        step.appendChild(el('div', 'lkg-name', it.name || 'ไม่ระบุชื่อ'));
+        var hb = btn('lkg-heart', heartLabel(it), function () { giveHeart(it, hb); }, 'ให้หัวใจ');
+        hb.setAttribute('aria-pressed', String(hearted().indexOf(it.id) >= 0));
+        step.appendChild(hb);
+        step.appendChild(el('div', 'lkg-block', ['🥇', '🥈', '🥉'][rank]));
+        steps.appendChild(step);
+      });
+      wrap.appendChild(steps);
+      return wrap;
+    }
+
     function renderList() {
       var y = list.scrollTop;
       list.textContent = '';
@@ -101,6 +146,7 @@
         list.appendChild(el('div', 'lkg-empty', loading ? 'กำลังโหลด…' : 'ยังไม่มีใครลอยกระทงที่ทำเองเลย\nเป็นคนแรกสิ! กด ✂️ ทำกระทงของฉัน'));
         return;
       }
+      if (top.length) { list.appendChild(podium()); list.appendChild(el('div', 'lkg-all', 'กระทงทั้งหมด ใหม่สุดก่อน')); }
       var grid = el('div', 'lkg-grid');
       items.forEach(function (it) {
         var card = el('div', 'lkg-card');
@@ -169,6 +215,13 @@
     requestAnimationFrame(function () { box.classList.add('lkg-in'); });
     current = { close: finish };
     load();
+    fetch(base + '/gallery?top=3', { credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !current || !d.items || !d.items.length) return;
+        top = d.items;
+        if (!viewing) renderList();
+      }).catch(function () { /* no podium: the grid still works */ });
   }
   function close() { if (current) current.close(); }
 

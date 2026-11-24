@@ -78,3 +78,34 @@ test('a wish keeps its kid for the gallery but the public list does not show it'
   assert.ok(w.every((x) => x.kid === undefined));
   assert.equal((await store.gallery(10, 0)).total, 2);
 });
+
+test('topFrom: the most-hearted krathongs, at least one heart, ties keep the newer first', () => {
+  const { topFrom } = require('../lib/store.js');
+  const items = [{ id: 'e' }, { id: 'd' }, { id: 'c' }, { id: 'b' }, { id: 'a' }];   // newest first
+  const out = topFrom(items, { a: 5, b: 2, c: 0, d: 2, e: 1 }, 3);
+  assert.deepEqual(out.map((x) => [x.id, x.hearts]), [['a', 5], ['d', 2], ['b', 2]]);
+  assert.deepEqual(topFrom(items, {}, 3), []);
+});
+
+test('memory store and GET /api/gallery?top=3 return the podium', async () => {
+  const store = createMemoryStore();
+  const a = await store.add({ name: 'a', wish: '1', design: { v: 2 }, kid: 'kida01' });
+  const b = await store.add({ name: 'b', wish: '2', design: { v: 2 }, kid: 'kidb01' });
+  await store.add({ name: 'c', wish: '3', design: { v: 2 }, kid: 'kidc01' });
+  await store.heart(a, 'client-one-01'); await store.heart(a, 'client-two-02'); await store.heart(b, 'client-one-01');
+  assert.deepEqual((await store.top(3)).map((x) => [x.name, x.hearts]), [['a', 2], ['b', 1]]);
+  const g = await call(createGalleryHandler({ store }), { url: '/api/gallery?top=3' });
+  assert.equal(g.statusCode, 200);
+  assert.deepEqual(g.json.items.map((x) => x.name), ['a', 'b']);
+  assert.deepEqual((await call(createGalleryHandler({ store: null }), { url: '/api/gallery?top=3' })).json, { items: [] });
+});
+
+test('redis store: top reads the whole list once and the hearts once', async () => {
+  const calls = [];
+  const list = [JSON.stringify({ id: 'b', name: 'B', wish: 'w', look: 1 }), JSON.stringify({ id: 'a', name: 'A', wish: 'w', look: 1 }), JSON.stringify({ id: 'p', name: 'P', wish: 'plain' })];
+  const results = [[{ result: list }], [{ result: ['1', '4'] }]];
+  const f = async (url, init) => { calls.push(JSON.parse(init.body)); return { ok: true, status: 200, json: async () => results.shift() }; };
+  const s = createStore({ url: 'https://r', token: 't', fetch: f });
+  assert.deepEqual(await s.top(3), [{ id: 'a', name: 'A', wish: 'w', hearts: 4 }, { id: 'b', name: 'B', wish: 'w', hearts: 1 }]);
+  assert.deepEqual(calls[1], [['HMGET', 'lk:hearts', 'b', 'a']]);
+});
