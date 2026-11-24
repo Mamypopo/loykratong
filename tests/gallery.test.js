@@ -34,15 +34,40 @@ test('memory store: gallery with hearts, one heart per client per krathong', asy
   assert.deepEqual(await s.gallery(24, 0), { total: 1, items: [{ id: a, name: 'a', wish: '1', hearts: 2 }] });
 });
 
-test('redis store: heart checks the krathong exists, sets a per-client marker, then counts', async () => {
+test('redis store: heart finds the krathong, votes once per client per krathong, counts on this float', async () => {
   const calls = [];
-  const results = [[{ result: 1 }, { result: 'OK' }], [{ result: 3 }, { result: 1 }], [{ result: 1 }, { result: null }], [{ result: '3' }]];
+  const list = [JSON.stringify({ id: 'abcd1234', name: 'n', wish: 'w', look: 1, kid: 'kidone1' }), JSON.stringify({ id: 'old00001', name: 'n', wish: 'w', look: 1, kid: 'kidone1' })];
+  const results = [
+    [{ result: list }, { result: 1 }], [{ result: 'OK' }], [{ result: 3 }, { result: 1 }, { result: ['3', '2'] }],
+    [{ result: list }, { result: 1 }], [{ result: null }], [{ result: ['3', '2'] }]
+  ];
   const f = async (url, init) => { calls.push(JSON.parse(init.body)); return { ok: true, status: 200, json: async () => results.shift() }; };
   const s = createStore({ url: 'https://r', token: 't', fetch: f });
-  assert.deepEqual(await s.heart('abcd1234', 'client-one-01'), { hearts: 3, already: false });
-  assert.deepEqual(calls[0], [['EXISTS', 'lk:look:abcd1234'], ['SET', 'lk:hv:abcd1234:client-one-01', '1', 'NX', 'EX', '604800']]);
-  assert.deepEqual(calls[1], [['HINCRBY', 'lk:hearts', 'abcd1234', '1'], ['EXPIRE', 'lk:hearts', '604800']]);
-  assert.deepEqual(await s.heart('abcd1234', 'client-one-01'), { hearts: 3, already: true });
+  assert.deepEqual(await s.heart('abcd1234', 'client-one-01'), { hearts: 5, already: false });
+  assert.deepEqual(calls[0], [['LRANGE', 'lk:wishes', '0', '299'], ['EXISTS', 'lk:look:abcd1234']]);
+  assert.deepEqual(calls[1], [['SET', 'lk:hv:k:kidone1:client-one-01', '1', 'NX', 'EX', '604800']]);
+  assert.deepEqual(calls[2], [['HINCRBY', 'lk:hearts', 'abcd1234', '1'], ['EXPIRE', 'lk:hearts', '604800'], ['HMGET', 'lk:hearts', 'abcd1234', 'old00001']]);
+  assert.deepEqual(await s.heart('abcd1234', 'client-one-01'), { hearts: 5, already: true });
+});
+
+test('hearts follow the krathong across its floats (one per client per krathong)', async () => {
+  const st = createMemoryStore();
+  const a1 = await st.add({ name: 'a', wish: '1', design: { v: 2 }, kid: 'kidaaa1' });
+  assert.deepEqual(await st.heart(a1, 'client-one-01'), { hearts: 1, already: false });
+  const a2 = await st.add({ name: 'a ใหม่', wish: '2', design: { v: 2 }, kid: 'kidaaa1' });   // floated again after editing
+  assert.deepEqual(await st.heart(a2, 'client-one-01'), { hearts: 1, already: true });
+  assert.deepEqual(await st.heart(a2, 'client-two-02'), { hearts: 2, already: false });
+  assert.deepEqual(await st.gallery(24, 0), { total: 1, items: [{ id: a2, name: 'a ใหม่', wish: '2', hearts: 2 }] });
+  assert.deepEqual((await st.top(3)).map((x) => [x.id, x.hearts]), [[a2, 2]]);
+});
+
+test('redis store: gallery sums the hearts of every float of a krathong', async () => {
+  const list = [JSON.stringify({ id: 'n2', name: 'N', wish: 'w', look: 1, kid: 'kidnnn1' }), JSON.stringify({ id: 'x1', name: 'X', wish: 'w', look: 1 }), JSON.stringify({ id: 'n1', name: 'N', wish: 'w', look: 1, kid: 'kidnnn1' })];
+  const calls = [], results = [[{ result: list }], [{ result: ['1', '4', '2'] }]];
+  const f = async (url, init) => { calls.push(JSON.parse(init.body)); return { ok: true, status: 200, json: async () => results.shift() }; };
+  const g = await createStore({ url: 'https://r', token: 't', fetch: f }).gallery(24, 0);
+  assert.deepEqual(g.items.map((x) => [x.id, x.hearts]), [['n2', 5], ['x1', 2]]);
+  assert.deepEqual(calls[1], [['HMGET', 'lk:hearts', 'n2', 'n1', 'x1']]);
 });
 
 test('GET /api/gallery lists krathongs with hearts, edge-cached briefly; bad paging is clamped', async () => {
