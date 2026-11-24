@@ -997,6 +997,9 @@
       candle: new THREE.CylinderGeometry(0.075, 0.08, 0.6, 12),
       flame: new THREE.ConeGeometry(0.07, 0.22, 10),
       coin: new THREE.CylinderGeometry(0.16, 0.16, 0.04, 20),
+      incHandle: new THREE.CylinderGeometry(0.022, 0.022, 0.3, 5),
+      incBody: new THREE.CylinderGeometry(0.017, 0.019, 0.6, 5),
+      incTip: new THREE.SphereGeometry(0.026, 6, 4),
       shell: new THREE.SphereGeometry(0.85, 24, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2)
     };
     function isCached(g) {
@@ -1026,12 +1029,17 @@
         parts.push({ geo: S(1, 6, 4), color: 0xfff4a0, m: M(dir.x * 1.08, dir.y * 1.08 + yOff + 0.02, dir.z * 1.08, null, rr * 0.35) });
       }
     }
+    // one stick of Thai incense, 0.9 long, centred at (cx, cy, cz) and leaning by angle a: red handle below, dark stick, glowing tip
+    function incenseStick(parts, cx, cy, cz, a) {
+      var q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), a);
+      function at(t) { return [cx - Math.sin(a) * t, cy + Math.cos(a) * t]; }
+      var h = at(-0.3), b = at(0.15), tip = at(0.45);
+      parts.push({ geo: geoCache.incHandle, color: 0xd32f2f, m: M(h[0], h[1], cz, q) });
+      parts.push({ geo: geoCache.incBody, color: 0x5a3a22, m: M(b[0], b[1], cz, q) });
+      parts.push({ geo: geoCache.incTip, color: 0xffa23a, m: M(tip[0], tip[1], cz) });
+    }
     function incense(parts, x, y, z) {
-      [-0.5, -0.3, -0.1].forEach(function (off, ii) {
-        var q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), off * 0.4);
-        parts.push({ geo: new THREE.CylinderGeometry(0.018, 0.018, 0.9, 5), color: 0x8a4b2a, m: M(x + ii * 0.06, y + 0.45, z, q) });
-        parts.push({ geo: S(0.035, 6, 4), color: 0xff4b2b, m: M(x + ii * 0.06 - Math.sin(off * 0.4) * 0.45, y + 0.45 + Math.cos(off * 0.4) * 0.45, z) });
-      });
+      [-0.5, -0.3, -0.1].forEach(function (off, ii) { incenseStick(parts, x + ii * 0.06, y + 0.45, z, off * 0.4); });
     }
     function leafRing(parts, n, r, y, len, tilt, w, offset) {
       for (var k = 0; k < n; k++) {
@@ -1484,10 +1492,7 @@
         p.push({ geo: geoCache.candle, color: 0xfff6dc, m: M(0, 0.3, 0) });
         p.push({ geo: geoCache.flame, color: 0xffe08a, m: M(0, 0.71, 0) });
       },
-      function incense(p) { [-1, 0, 1].forEach(function (s) {
-        p.push({ geo: new THREE.CylinderGeometry(0.018, 0.018, 0.9, 5), color: 0x8a4b2a, m: M(s * 0.05, 0.45, 0, E(0, 0, s * 0.12)) });
-        p.push({ geo: S(0.035, 6, 4), color: 0xff4b2b, m: M(s * 0.05 - s * 0.055, 0.9, 0) });
-      }); },
+      function incense(p) { [-1, 0, 1].forEach(function (s) { incenseStick(p, s * 0.05, 0.45, 0, s * 0.12); }); },
       function marigold(p) {
         p.push({ geo: new THREE.IcosahedronGeometry(1, 1), color: 0xffa31a, m: M(0, 0.13, 0, null, 0.17, 0.13, 0.17) });
         p.push({ geo: new THREE.IcosahedronGeometry(1, 1), color: 0xffc43d, m: M(0, 0.2, 0, null, 0.11, 0.08, 0.11) });
