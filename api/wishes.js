@@ -78,6 +78,7 @@ function createHandler({ store }) {
       photo = data.photo;
     }
     const look = design.sanitize(data.design);
+    if (look && look.texts.some((x) => !check(x.t).ok)) return send(res, 422, { error: 'blocked' });   // words stuck on the krathong
     if (!store) return send(res, 503, { error: 'storage' });
 
     try {

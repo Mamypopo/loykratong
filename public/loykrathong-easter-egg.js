@@ -1566,6 +1566,33 @@
       return grp;
     }
 
+    // words as a sticker on a little stick: fat white outline, ink colour inside, readable from both sides
+    function drawWords(ctx, w, h, txt) {
+      ctx.clearRect(0, 0, w, h);
+      var size = 92;
+      ctx.font = '700 ' + size + 'px Mitr, sans-serif';
+      var tw = ctx.measureText(txt.t).width;
+      if (tw > w - 44) { size = Math.max(28, Math.floor(size * (w - 44) / tw)); ctx.font = '700 ' + size + 'px Mitr, sans-serif'; }
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+      var ink = INK[txt.c] || INK[0], light = ink.toLowerCase() === '#ffffff';
+      ctx.lineWidth = Math.max(8, size * 0.24); ctx.strokeStyle = light ? '#1b1030' : '#ffffff';
+      ctx.strokeText(txt.t, w / 2, h / 2 + 4);
+      ctx.fillStyle = ink; ctx.fillText(txt.t, w / 2, h / 2 + 4);
+    }
+    function textMesh(txt) {
+      var tex = canvasTex(512, 128, function (ctx, w, h) { drawWords(ctx, w, h, txt); });
+      if (document.fonts && document.fonts.load) document.fonts.load('700 92px Mitr').then(function () {
+        drawWords(tex.image.getContext('2d'), 512, 128, txt); tex.needsUpdate = true;
+      }).catch(function () { /* keep the fallback font */ });
+      var mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.35 });
+      var grp = new THREE.Group(), geo = new THREE.PlaneGeometry(1.2, 0.3);
+      [0, Math.PI].forEach(function (ry) {   // two faces back to back, so the words never read mirrored
+        var m = new THREE.Mesh(geo, mat); m.position.y = 0.42; m.rotation.y = ry; m.userData.ownMap = true; grp.add(m);
+      });
+      var stick = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 4), mats.candle); stick.position.y = 0.14; grp.add(stick);
+      return grp;
+    }
+
     // the person's photo as a polaroid that always faces the camera
     function photoSprite(url) {
       var mat = new THREE.SpriteMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
@@ -1590,6 +1617,7 @@
         var special = null;
         if (it.k === DZ.ITEM.photo) { if (!photo || env.photos === false) return; special = photoSprite(photo); }
         else if (it.k === DZ.ITEM.doodle) { var dd = d.doodles[it.d]; if (!dd) return; special = doodleMesh(dd); }
+        else if (DZ.ITEM.text != null && it.k === DZ.ITEM.text) { var tx = (d.texts || [])[it.d]; if (!tx) return; special = textMesh(tx); }
         if (special) {
           var wrap = holder || new THREE.Group();
           wrap.position.set(it.p[0], it.p[1], it.p[2]); wrap.rotation.y = it.r; wrap.scale.setScalar(it.s);

@@ -56,6 +56,10 @@
     '.lkw-wrap .lkw-thumb{width:52px;height:52px;border-radius:10px;background:#fffaf0;padding:0;border:2px solid transparent}',
     '.lkw-wrap .lkw-thumb[aria-pressed="true"]{border-color:#ffe07a}',
     '.lkw-wrap .lkw-thumb canvas{width:100%;height:100%;display:block}',
+    '.lkw-wrap .lkw-words{width:100%;box-sizing:border-box;font:inherit;font-size:17px;padding:10px 14px;border-radius:14px;border:1.5px solid rgba(255,226,122,.45);background:rgba(255,255,255,.95);color:#2a1a10}',
+    '.lkw-wrap .lkw-wordpic{width:100%;max-width:340px;height:auto;aspect-ratio:4;display:block;border-radius:12px;background:repeating-conic-gradient(rgba(255,255,255,.06) 0 25%,transparent 0 50%) 0 0/16px 16px}',
+    '.lkw-wrap .lkw-tchip{display:inline-flex;align-items:center;gap:6px}',
+    '.lkw-wrap .lkw-tchip i{font-style:normal;opacity:.7;padding-left:4px}',
     '.lkw-edit{position:absolute;left:50%;transform:translateX(-50%);z-index:21;top:calc(max(10px,env(safe-area-inset-top)) + 118px);display:flex;flex-wrap:wrap;justify-content:center;width:max-content;max-width:calc(100vw - 20px);gap:6px;padding:6px;border-radius:24px;background:rgba(30,14,8,.85);border:1.5px solid rgba(255,226,122,.5)}',
     '.lkw-edit[hidden]{display:none}',
     '.lkw-wrap .lkw-edit button{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.1);font-size:17px}',
@@ -107,6 +111,21 @@
       img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('decode')); };
       img.src = url;
     });
+  }
+
+  // the same look as the sticker on the krathong (loykrathong-easter-egg.js drawWords)
+  function drawWords(ctx, w, h, txt) {
+    ctx.clearRect(0, 0, w, h);
+    if (!txt.t) return;
+    var size = 92;
+    ctx.font = '700 ' + size + 'px Mitr, sans-serif';
+    var tw = ctx.measureText(txt.t).width;
+    if (tw > w - 44) { size = Math.max(28, Math.floor(size * (w - 44) / tw)); ctx.font = '700 ' + size + 'px Mitr, sans-serif'; }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+    var ink = D.INK[txt.c] || D.INK[0], light = ink.toLowerCase() === '#ffffff';
+    ctx.lineWidth = Math.max(8, size * 0.24); ctx.strokeStyle = light ? '#1b1030' : '#ffffff';
+    ctx.strokeText(txt.t, w / 2, h / 2 + 4);
+    ctx.fillStyle = ink; ctx.fillText(txt.t, w / 2, h / 2 + 4);
   }
 
   function drawDoodle(ctx, doodle, size) {
@@ -167,7 +186,7 @@
     }
     function changed() { table.refresh(); }
 
-    var TABS = [['base', 'ฐาน'], ['leaf', 'กลีบ'], ['stick', 'ติดของ'], ['draw', 'วาดเอง'], ['photo', 'รูปของฉัน']];
+    var TABS = [['base', 'ฐาน'], ['leaf', 'กลีบ'], ['stick', 'ติดของ'], ['draw', 'วาดเอง'], ['text', 'ตัวอักษร'], ['photo', 'รูปของฉัน']];
     TABS.forEach(function (t) {
       var b = btn('lkw-tab', t[1], function () { tab = t[0]; table.mode('build'); setTool(null); render(); });
       b.setAttribute('role', 'tab'); b.dataset.tab = t[0];
@@ -316,7 +335,7 @@
       var box = el('div');
       var g = el('div', 'lkw-grid');
       D.ITEMS.forEach(function (it, i) {
-        if (it.id === 'photo' || it.id === 'doodle') return;
+        if (it.id === 'photo' || it.id === 'doodle' || it.id === 'text') return;
         var on = !!tool && tool.k === i;
         var b = btn('lkw-opt', null, function () { if (on) setTool(null); else setTool({ k: i }, it.icon); render(); });
         b.setAttribute('aria-pressed', String(on));
@@ -410,6 +429,85 @@
       return box;
     }
 
+    // ---- words stuck on the krathong
+    var words = '';
+    function textPanel() {
+      if (!look.design.texts) look.design.texts = [];
+      var texts = look.design.texts, full = texts.length >= D.MAX_TEXTS;
+      var box = el('div');
+      var input = el('input', 'lkw-words'); input.type = 'text'; input.maxLength = 40; input.value = words;
+      input.placeholder = 'พิมพ์ได้ ' + D.MAX_TEXT_CHARS + ' ตัว เช่น รวย ๆ หรือชื่อคุณ';
+      input.setAttribute('aria-label', 'ข้อความที่จะติดบนกระทง');
+      var pic = el('canvas', 'lkw-wordpic'); pic.width = 512; pic.height = 128;
+      function cut(v) { return Array.from(v).slice(0, D.MAX_TEXT_CHARS).join(''); }
+      function preview() { drawWords(pic.getContext('2d'), 512, 128, { t: words.trim(), c: ink }); }
+      input.addEventListener('input', function () {
+        var v = cut(input.value);
+        if (v !== input.value) input.value = v;
+        words = v; preview();
+      });
+      box.appendChild(input);
+      var ideas = el('div', 'lkw-chips'); ideas.style.margin = '8px 0';
+      ['รวย ๆ', 'สู้ ๆ', 'ปัง!', 'สาธุ', 'ลอยกระทง ' + (new Date().getFullYear() + 543)].forEach(function (w) {
+        ideas.appendChild(btn('lkw-chip', w, function () { words = w; input.value = w; preview(); }));
+      });
+      box.appendChild(ideas);
+      var inks = el('div', 'lkw-chips'); inks.style.marginBottom = '8px';
+      D.INK.forEach(function (c, i) {
+        var b = btn('lkw-sw', null, function () {
+          ink = i;
+          Array.prototype.forEach.call(inks.children, function (x, j) { x.setAttribute('aria-pressed', String(j === i)); });
+          preview();
+        }, 'สี ' + (i + 1));
+        b.style.background = c; b.setAttribute('aria-pressed', String(ink === i));
+        inks.appendChild(b);
+      });
+      box.appendChild(inks);
+      box.appendChild(pic);
+      preview();
+      if (document.fonts && document.fonts.load) document.fonts.load('700 92px Mitr').then(preview).catch(function () { /* fallback font */ });
+      var use = btn('lkw-big', '📌 ติดข้อความนี้บนกระทง', function () {
+        var t = words.trim();
+        if (!t) { toast('พิมพ์ข้อความก่อนนะ 🔤'); input.focus(); return; }
+        var F = global.LoyKrathongFilter;
+        if (F && !F.check(t).ok) { toast('ขอคำที่สุภาพหน่อยนะ 🙏'); return; }
+        var clean = D.sanitize({ texts: [{ t: t, c: ink }] }).texts[0];
+        if (!clean) return;
+        texts.push(clean);
+        words = '';
+        setTool({ k: D.ITEM.text, d: texts.length - 1 }, '🔤 ' + clean.t);
+        changed(); render();
+      });
+      use.style.marginTop = '10px';
+      use.disabled = full;
+      box.appendChild(use);
+      if (texts.length) {
+        box.appendChild(el('div', 'lkw-label', full ? 'ทำครบ ' + D.MAX_TEXTS + ' ข้อความแล้ว แตะเพื่อติดเพิ่มอีกชิ้น หรือกด ✕ เพื่อลบ' : 'ข้อความที่ทำไว้ แตะเพื่อติดเพิ่มอีกชิ้น'));
+        var list = el('div', 'lkw-chips');
+        texts.forEach(function (tx, i) {
+          var on = !!tool && tool.k === D.ITEM.text && tool.d === i;
+          var b = btn('lkw-chip lkw-tchip', null, function (e) {
+            if (e.target && e.target.dataset && e.target.dataset.del) {   // ✕: drop this text and every sticker made from it
+              texts.splice(i, 1);
+              look.design.items = look.design.items.filter(function (it) { return !(it.k === D.ITEM.text && it.d === i); })
+                .map(function (it) { return it.k === D.ITEM.text && it.d > i ? Object.assign({}, it, { d: it.d - 1 }) : it; });
+              setTool(null); table.select(-1); showEdit(-1); changed(); render();
+              return;
+            }
+            if (on) setTool(null); else setTool({ k: D.ITEM.text, d: i }, '🔤 ' + tx.t);
+            render();
+          }, 'ข้อความ ' + tx.t);
+          b.setAttribute('aria-pressed', String(on));
+          var sw = el('span'); sw.style.color = D.INK[tx.c]; sw.textContent = tx.t; b.appendChild(sw);
+          var x = el('i', null, '✕'); x.dataset.del = '1'; b.appendChild(x);
+          list.appendChild(b);
+        });
+        box.appendChild(list);
+      }
+      box.appendChild(el('p', 'lkw-note', 'ข้อความลอยไปกับกระทงให้ทุกคนเห็น รวมถึงบนจอใหญ่ คำไม่สุภาพจะติดไม่ได้'));
+      return box;
+    }
+
     // ---- photo
     function photoPanel() {
       var box = el('div');
@@ -451,7 +549,7 @@
       Array.prototype.forEach.call(tabs.children, function (b) { b.setAttribute('aria-selected', String(b.dataset.tab === tab)); });
       var y = body.scrollTop;
       body.textContent = '';
-      body.appendChild(tab === 'base' ? basePanel() : tab === 'leaf' ? leafPanel() : tab === 'stick' ? stickPanel() : tab === 'draw' ? drawPanel() : photoPanel());
+      body.appendChild(tab === 'base' ? basePanel() : tab === 'leaf' ? leafPanel() : tab === 'stick' ? stickPanel() : tab === 'draw' ? drawPanel() : tab === 'text' ? textPanel() : photoPanel());
       body.scrollTop = y;
     }
 

@@ -161,3 +161,11 @@ test('/api/look: bad id 400, unknown id 404, no store 404', async () => {
   assert.equal((await call(lh, { url: '/api/look?id=abc123' })).statusCode, 404);
   assert.equal((await call(createLookHandler({ store: null }), { url: '/api/look?id=abc123' })).statusCode, 404);
 });
+
+test('POST with a bad word stuck on the krathong as text is rejected with 422 blocked', async () => {
+  const store = memoryStore(), h = createHandler({ store });
+  const res = await call(h, post({ name: 'a', wish: 'ขอให้รวย', design: { texts: [{ t: 'ไอ้ควาย' }], items: [{ k: 14, d: 0, p: [0, 0.5, 0] }] } }));
+  assert.equal(res.statusCode, 422);
+  assert.equal(res.json.error, 'blocked');
+  assert.equal((await call(h, post({ name: 'a', wish: 'ขอให้รวย', design: { texts: [{ t: 'รวย ๆ' }] } }))).statusCode, 201);
+});

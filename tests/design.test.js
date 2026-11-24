@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const D = require('../public/design.js');
 
 const tri = [[0.5, 1], [0, 0], [1, 0]];
-const DEF = { v: 2, base: 6, material: 0, noCandle: false, trunk: 0.4, leaf: null, leafColor: 0, petals: 11, flowers: 0, items: [], doodles: [] };
+const DEF = { v: 2, base: 6, material: 0, noCandle: false, trunk: 0.4, leaf: null, leafColor: 0, petals: 11, flowers: 0, items: [], doodles: [], texts: [] };
 
 test('sanitize fills defaults and keeps valid choices', () => {
   assert.deepEqual(D.sanitize({}), DEF);
@@ -123,4 +123,14 @@ test('noCandle: only a real true removes the centre candle', () => {
   assert.equal(D.sanitize({ noCandle: true }).noCandle, true);
   assert.equal(D.sanitize({ noCandle: 'yes' }).noCandle, false);
   assert.equal(D.sanitize({}).noCandle, false);
+});
+
+test('texts: short words in an ink colour; a text item must point at an existing text', () => {
+  const d = D.sanitize({
+    texts: [{ t: '  รวย ๆ  ', c: 2 }, { t: '' }, { t: 'a\nb\tc', c: 99 }, 'x', { t: 'ลอยกระทงปีนี้ขอให้รวยมาก ๆ เลยนะ' }],
+    items: [{ k: D.ITEM.text, d: 0, p: [0, 0.5, 0] }, { k: D.ITEM.text, d: 2, p: [0, 0.5, 0] }, { k: D.ITEM.text, d: 1, p: [0, 0.5, 0] }, { k: D.ITEM.text, p: [0, 0.5, 0] }]
+  });
+  assert.deepEqual(d.texts, [{ t: 'รวย ๆ', c: 2 }, { t: 'a b c', c: 0 }, { t: Array.from('ลอยกระทงปีนี้ขอให้รวยมาก ๆ เลยนะ').slice(0, D.MAX_TEXT_CHARS).join('').trim(), c: 0 }]);
+  assert.deepEqual(d.items, [{ k: D.ITEM.text, d: 0, p: [0, 0.5, 0], r: 0, s: 1 }, { k: D.ITEM.text, d: 1, p: [0, 0.5, 0], r: 0, s: 1 }]);
+  assert.equal(D.sanitize({ texts: Array.from({ length: 9 }, (_, i) => ({ t: 'w' + i })) }).texts.length, D.MAX_TEXTS);
 });
