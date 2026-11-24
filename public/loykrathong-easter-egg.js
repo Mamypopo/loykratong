@@ -1039,7 +1039,7 @@
       parts.push({ geo: geoCache.incTip, color: 0xffa23a, m: M(tip[0], tip[1], cz) });
     }
     function incense(parts, x, y, z) {
-      [-0.5, -0.3, -0.1].forEach(function (off, ii) { incenseStick(parts, x + ii * 0.06, y + 0.45, z, off * 0.4); });
+      [-0.5, -0.3, -0.1].forEach(function (off, ii) { incenseStick(parts, x + ii * 0.06, y + 0.45, z, (1 - ii) * 0.14); });   // tips fan out
     }
     function leafRing(parts, n, r, y, len, tilt, w, offset) {
       for (var k = 0; k < n; k++) {
@@ -1492,7 +1492,7 @@
         p.push({ geo: geoCache.candle, color: 0xfff6dc, m: M(0, 0.3, 0) });
         p.push({ geo: geoCache.flame, color: 0xffe08a, m: M(0, 0.71, 0) });
       },
-      function incense(p) { [-1, 0, 1].forEach(function (s) { incenseStick(p, s * 0.05, 0.45, 0, s * 0.12); }); },
+      function incense(p) { [-1, 0, 1].forEach(function (s) { incenseStick(p, s * 0.05, 0.45, 0, -s * 0.14); }); },   // tips fan out, like a real bundle
       function marigold(p) {
         p.push({ geo: new THREE.IcosahedronGeometry(1, 1), color: 0xffa31a, m: M(0, 0.13, 0, null, 0.17, 0.13, 0.17) });
         p.push({ geo: new THREE.IcosahedronGeometry(1, 1), color: 0xffc43d, m: M(0, 0.2, 0, null, 0.11, 0.08, 0.11) });
