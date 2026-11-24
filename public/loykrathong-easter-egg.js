@@ -229,6 +229,30 @@
 
   function feedKey(e) { return e.id || e.name + '|' + e.wish; }
 
+  // old wishes keep a quiet river company: a shuffled bag, so every one comes round once before any comes back
+  function makeReplay(rnd) {
+    rnd = rnd || Math.random;
+    var all = {}, bag = [], used = {}, last = '';
+    function refill() {
+      bag = Object.keys(all).filter(function (k) { return !used[k]; });
+      used = {};
+      for (var i = bag.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)), t = bag[i]; bag[i] = bag[j]; bag[j] = t; }
+      if (bag.length > 1 && bag[bag.length - 1] === last) { var x = bag[0]; bag[0] = bag[bag.length - 1]; bag[bag.length - 1] = x; }
+    }
+    return {
+      add: function (items) { (items || []).forEach(function (e) { var k = feedKey(e); if (k && !all[k]) all[k] = e; }); },
+      skip: function (keys) { keys.forEach(function (k) { used[k] = 1; }); },   // shown already: wait for the next round
+      size: function () { return Object.keys(all).length; },
+      next: function () {
+        if (!bag.length) refill();
+        if (!bag.length) refill();   // the opening batch was everything: start a full round
+        var k = bag.pop();
+        if (!k) return null;
+        last = k; return all[k];
+      }
+    };
+  }
+
   // เซียมซี after floating: office-flavoured, all good news
   var FORTUNES = [
     { rank: 'ปัง', text: 'ปีหน้าโบนัสมาเต็ม แต่ระวังประชุมยาวนิดนึง' },
@@ -3854,7 +3878,8 @@
       setTimeout(function () { if (p.parentNode) p.parentNode.removeChild(p); }, 1000);
     }
 
-    // other users' wishes: poll the feed; each one floated after we opened floats past once, a few seconds apart
+    // other users' wishes: poll the feed. Live ones float first, once each, a few seconds apart; on opening the
+    // newest few old ones float by, and when the river gets quiet an old one drifts past (each once per round)
     var feed = opts.demo ? null : makeFeed(opts.wishFeed);
     // ids of wishes sent from this browser: kept across reloads so your own never come back to you as "others"
     var MINE_KEY = 'lk-mine', mineIds = {};
@@ -3868,6 +3893,8 @@
     try { (JSON.parse(safeGet(SEEN_KEY) || '[]') || []).forEach(function (k) { seenIds[k] = 1; }); } catch (e) { /* ignore */ }
     function saveSeen() { try { safeSet(SEEN_KEY, JSON.stringify(Object.keys(seenIds).slice(-300))); } catch (e) { /* ignore */ } }
     var feedState = { seen: seenIds, mine: mineIds }, freshQueue = [], feedTimer = null, pollTimer = null, firstFetch = true;
+    var replay = makeReplay(), oldQueue = [];
+    var OPENING = opts.screen ? 8 : 4, QUIET_MS = opts.screen ? 6000 : 10000, QUIET_CARDS = opts.screen ? 6 : 3;
     var lastInput = Date.now();   // polling slows down when nobody has touched the page for a while
     root.addEventListener("pointerdown", function () { lastInput = Date.now(); }, true);
     root.addEventListener("keydown", function () { lastInput = Date.now(); }, true);
@@ -3875,9 +3902,14 @@
     function feedFetch() {
       Promise.resolve(feed.load(50)).then(function (d) {
         var m = mergeFeed(feedState, d && d.wishes);
-        if (firstFetch) {   // wishes from before we opened stay off the river (they are in the gallery): only live ones float
+        if (firstFetch) {   // wishes from before we opened: the newest few float by now, the rest wait in the replay bag
           firstFetch = false;
+          var olds = m.fresh.slice().reverse().concat(m.pool);   // newest first
+          replay.add(olds);
+          oldQueue = olds.slice(0, OPENING);
+          replay.skip(oldQueue.map(feedKey));
         } else {
+          replay.add(m.fresh);
           freshQueue = freshQueue.concat(m.fresh);
           if (freshQueue.length > FRESH_MAX) freshQueue = freshQueue.slice(freshQueue.length - FRESH_MAX);
         }
@@ -4003,7 +4035,14 @@
       if (closed) return;
       var now = Date.now();
       if (scene && !document.hidden && canFloat(labelsLayer.querySelectorAll(".lk-label").length, !!opts.screen)) {
+        var cards = labelsLayer.querySelectorAll(".lk-label").length;
         if (freshQueue.length && now - lastFloat >= freshGap) { floatWish(freshQueue.shift()); lastFloat = now; }
+        else if (oldQueue.length && now - lastFloat >= freshGap) { floatWish(oldQueue.shift()); lastFloat = now; }
+        else if (!freshQueue.length && !oldQueue.length && cards < QUIET_CARDS && now - lastFloat >= QUIET_MS) {
+          var old = replay.next();
+          if (old) floatWish(old);
+          lastFloat = now;
+        }
       }
       feedTimer = setTimeout(feedLoop, 500);
     }
@@ -4288,6 +4327,6 @@
     festivalDate: function (year) { return festivalDate(year || new Date().getFullYear()); },
     preload: preload,
     // exposed for tests
-    _mergeFeed: mergeFeed, _pickFortune: pickFortune, _shakeDetector: shakeDetector, _luckyNumbers: luckyNumbers, _FORTUNES: FORTUNES, _makeFeed: makeFeed, _pollDelay: pollDelay, _canFloat: canFloat
+    _mergeFeed: mergeFeed, _pickFortune: pickFortune, _shakeDetector: shakeDetector, _luckyNumbers: luckyNumbers, _FORTUNES: FORTUNES, _makeFeed: makeFeed, _makeReplay: makeReplay, _pollDelay: pollDelay, _canFloat: canFloat
   };
 })(window);

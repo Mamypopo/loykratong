@@ -135,3 +135,24 @@ test('luckyNumbers: a 2-digit and a 3-digit number, zero-padded', () => {
   const seq = [0.07, 0.042]; let k = 0;
   assert.deepEqual(JSON.parse(JSON.stringify(eggF._luckyNumbers(() => seq[k++]))), { two: '07', three: '042' });
 });
+
+// old wishes keep the river company: each one comes round once before any comes back
+test('replay bag shows every old wish once before repeating, skipping the opening ones', () => {
+  const egg = loadEgg();
+  let s = 1; const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const r = egg._makeReplay(rnd);
+  r.add([W('a'), W('b'), W('c'), W('d')]);
+  r.skip(['a']);   // already floated in the opening batch
+  const first = [r.next(), r.next(), r.next()].map((x) => x.id).sort();
+  assert.deepEqual(first, ['b', 'c', 'd']);
+  const round2 = [r.next(), r.next(), r.next(), r.next()].map((x) => x.id).sort();
+  assert.deepEqual(round2, ['a', 'b', 'c', 'd']);
+});
+
+test('replay bag: nothing to show when empty, and a live wish joins the bag', () => {
+  const r = loadEgg()._makeReplay(Math.random);
+  assert.equal(r.next(), null);
+  r.add([W('x')]); r.add([W('x')]);
+  assert.equal(r.size(), 1);
+  assert.equal(r.next().id, 'x');
+});
